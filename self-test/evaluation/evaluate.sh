@@ -173,14 +173,14 @@ if match:
     if [ -n "$SCORES" ]; then
       echo "$SCORES"
     else
-      echo "WARNING: LLM judge response parsing failed. Using structural scores only." >&2
+      echo "WARNING: LLM judge response parsing failed. Using structural scores only (overall_score below is structural-only, max ~0.10 -- NOT comparable to the 0.80 LLM-judge target)." >&2
       echo "METRIC overall_score=$(echo "scale=4; $CONSISTENCY_SCORE / 10 * 0.10" | bc)"
     fi
   else
-    echo "INFO: Set JUDGE_API_BASE and JUDGE_API_KEY for LLM-as-judge scoring." >&2
+    echo "INFO: Set JUDGE_API_BASE and JUDGE_API_KEY for LLM-as-judge scoring. The structural-only overall_score below maxes at ~0.10 and is NOT comparable to the 0.80 LLM-judge target." >&2
     echo "METRIC overall_score=$(echo "scale=4; $CONSISTENCY_SCORE / 10 * 0.10" | bc)"
   fi
 else
-  echo "INFO: Structural checks only (no JUDGE_MODEL or no reference skill)." >&2
+  echo "INFO: Structural checks only (no JUDGE_MODEL or no reference skill). The structural-only overall_score below maxes at ~0.10 and is NOT comparable to the 0.80 LLM-judge target." >&2
   echo "METRIC overall_score=$(echo "scale=4; $CONSISTENCY_SCORE / 10 * 0.10" | bc)"
 fi

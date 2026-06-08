@@ -92,7 +92,7 @@ Never edit the `agent-skills` copy directly — edit here and re-sync, or the tw
 
 ## Testing
 
-No automated test suite yet. Quality is verified through:
+There is no `npm test` unit suite, but the harness ships an automated structural self-test plus benchmark/panel verification. Quality is verified through:
 1. The `self-test/` benchmark — runs the factory against the tracked `tokyo-production-grade` case and scores the output against the committed reference skill (`./self-test/evaluation/evaluate.sh <case-id>`)
 2. LLM-as-judge evaluation against gold standards (set `JUDGE_MODEL`/`JUDGE_API_KEY`; deterministic structural checks otherwise)
 3. Panel verification with multi-agent consensus (Quality + Utility + Devil's Advocate)

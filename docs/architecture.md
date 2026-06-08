@@ -169,7 +169,7 @@ Each factory component traces to a real-world case study:
 
 | Component | Origin | Evidence |
 |-----------|--------|----------|
-| 5-phase pipeline | All 6 case studies | Every build followed this pattern |
+| 5-phase pipeline | All case studies | Every build followed this pattern |
 | METRIC protocol | Case studies + pi-autoresearch | Automated experiments proved it |
 | Research dossier | tokyo skill | 19 research files, 10 parallel subagents |
 | LLM-as-judge | Case studies | Deterministic scoring with rubrics |

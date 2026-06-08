@@ -12,6 +12,9 @@
 
 set -euo pipefail
 
+# Resolve the repo root so this runs correctly from any working directory.
+cd "$(dirname "$0")/../.."
+
 FACTORY_SKILL=".agents/skills/create-skill-autoresearch/SKILL.md"
 AUTORESEARCH_SKILL=".agents/skills/autoresearch/SKILL.md"
 PIPELINE_REF=".agents/skills/create-skill-autoresearch/references/pipeline-phases.md"

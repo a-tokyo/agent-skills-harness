@@ -4,7 +4,7 @@ Dogfooding workspace for validating the `create-skill-autoresearch` factory by r
 
 ## How It Works
 
-Each case study in `docs/study/` represents a skill that was successfully built manually. The self-test asks: **can the factory reproduce comparable quality given the same inputs?**
+The self-test asks: **can the factory reproduce comparable quality given the same inputs?** Each case below was a skill built manually during the factory's development; their source materials are private and are **not** in this public repo.
 
 ## Gold Standards
 
@@ -38,17 +38,20 @@ The rubric (`evaluation/rubric.yaml`) scores 8 dimensions:
 
 Target: 0.80 overall score.
 
-## Data Split
+## Data Split (historical)
 
-| Case Study | Tag | Role |
-|------------|-----|------|
-| documentation-workflow | training | Used during autoresearch iterations |
-| executive-summary | training | Used during autoresearch iterations |
-| scenario-generator | training | Used during autoresearch iterations |
-| task-decomposition | validation | Periodic overfitting checks |
-| tokyo-production-grade | test | Held out until final verification |
+This is the train/validation/test split from the factory's **original, private** development, recorded for
+provenance. **None of these cases is runnable on a public clone** — their `input_materials` are not in this
+repo (all `null` in `gold-standards/manifest.yaml`). The runnable public evidence is the subagent-panel
+benchmark in [`benchmarks/`](benchmarks/).
 
-Tokyo is the test case because it's the deepest and most demanding -- if the factory can match it, the factory works.
+| Case Study | Tag | Role (during private development) |
+|------------|-----|-----------------------------------|
+| documentation-workflow | training | used during autoresearch iterations |
+| executive-summary | training | used during autoresearch iterations |
+| scenario-generator | training | used during autoresearch iterations |
+| task-decomposition | validation | periodic overfitting checks |
+| tokyo-production-grade | test | held out until final verification |
 
 ## Two evaluation scripts (don't confuse them)
 

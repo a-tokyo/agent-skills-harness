@@ -19,7 +19,9 @@ be plugged in via `JUDGE_MODEL`/`JUDGE_API_KEY`).
 | Devil's Advocate | 0.59 | ITERATE |
 | **Adjudicated consensus** | **≈ 0.84** | **PASS** (target 0.80) |
 
-Candidate: `self-test/runs/premortem-bench/skill/SKILL.md` (246 lines, built blind).
+Candidate (committed for inspection): [`premortem-rebuild.candidate.md`](premortem-rebuild.candidate.md)
+— 246 lines, built blind. (Also produced at the gitignored `self-test/runs/premortem-bench/skill/SKILL.md`
+during the run; the committed copy here is the same file so the score is reproducible/inspectable.)
 
 ## Consensus adjudication (why the DA was over-ruled)
 
@@ -50,4 +52,5 @@ Genuine, agreed observations (real gaps, not blocking): the candidate omits the 
   sinking a good skill — or rubber-stamping a bad one).
 - **Doesn't:** judges are Sonnet subagents, not a calibrated external model; judge variance is real (see the DA
   divergence). For a higher-confidence number, plug an external `JUDGE_MODEL` into `self-test/evaluation/evaluate.sh`.
-  This is one case, not a suite.
+  This is one case, not a suite; and two rubric dimensions (`research_quality`, `process_quality`) are a loose
+  fit for scoring a single finished artifact (no dossier/process was given to the judges) and were applied leniently.
