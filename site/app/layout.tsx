@@ -52,7 +52,7 @@ const navbar = (
 
 const footer = (
   <Footer>
-    MIT {new Date().getFullYear()} © <a href="https://github.com/a-tokyo">Ahmed Tokyo</a>.
+    MIT {new Date().getFullYear()} © <a href="https://ahmedtokyo.com">Ahmed Tokyo</a> · <a href="https://github.com/a-tokyo">GitHub</a>.
   </Footer>
 )
 
