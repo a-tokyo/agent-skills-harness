@@ -1,0 +1,55 @@
+# Self-test gold standards
+# Each case study represents a successful skill build with known quality outcomes.
+# The factory should be able to reproduce comparable results given the same inputs.
+#
+# PUBLIC CLONE NOTE: Only the `tokyo-production-grade` case is runnable on a fresh clone.
+# Its reference_skill points to a committed file in this repo (.agents/skills/production-grade/SKILL.md).
+# All other cases are documented historical references; their source materials exist only
+# in the maintainer's private environment and are not included in this repository.
+# input_materials is set to null for any path that is gitignored or otherwise absent here.
+
+cases:
+  - id: tokyo-production-grade
+    domain: "Engineering posture / coding principles"
+    input_materials: null  # source materials from the original skill build are not in this repo
+    reference_skill: ".agents/skills/production-grade/SKILL.md"
+    evaluation_method: "12-gate quality bar"
+    final_outcome: "All 12 gates green, 170-line body, 9 reference files"
+    tags: ["test"]
+    notes: "Deepest case study. Research dossier + multi-gate quality bar. Runnable: reference_skill is committed."
+
+  - id: documentation-workflow
+    domain: "Product documentation workflow"
+    input_materials: null
+    reference_skill: null
+    evaluation_method: "14-dimension rubric scored 0-2"
+    final_outcome: "24+/28 target score, built-in self-improvement loop"
+    tags: ["training"]
+    notes: "Gold standard from human-authored pages. Skill has embedded autoresearch."
+
+  - id: executive-summary
+    domain: "Executive summary aggregation"
+    input_materials: null
+    reference_skill: null
+    evaluation_method: "6-dimension LLM-as-judge (1-10)"
+    final_outcome: "8.1/10 overall quality score"
+    tags: ["training"]
+    notes: "Script-driven autoresearch with Python evaluation pipeline."
+
+  - id: scenario-generator
+    domain: "Game scenario generation pipeline"
+    input_materials: null
+    reference_skill: null
+    evaluation_method: "Quality report + benchmarking"
+    final_outcome: "Matched or exceeded human-written scenario quality"
+    tags: ["training"]
+    notes: "Pipeline skill with deterministic scoring."
+
+  - id: task-decomposition
+    domain: "Complex task decomposition and validation"
+    input_materials: null  # external reference implementation, not bundled in this repo
+    reference_skill: null
+    evaluation_method: "Validation loops per unit of work"
+    final_outcome: "Small models doing complex work via structured decomposition"
+    tags: ["validation"]
+    notes: "Architecture patterns, not a standalone skill. Use for pattern validation."

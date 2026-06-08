@@ -1,0 +1,6 @@
+[submodule "docs/resources/pi-autoresearch"]
+	path = docs/resources/pi-autoresearch
+	url = https://github.com/davebcn87/pi-autoresearch
+[submodule "docs/resources/andrej-karpathy-skills"]
+	path = docs/resources/andrej-karpathy-skills
+	url = https://github.com/multica-ai/andrej-karpathy-skills

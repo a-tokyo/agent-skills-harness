@@ -1,0 +1,71 @@
+name: factory-self-test-rubric
+description: >
+  Evaluates whether the create-skill-autoresearch factory produces skills
+  of comparable quality to manually-built case study skills, given the
+  same input materials and domain.
+
+dimensions:
+  - name: correctness
+    weight: 0.15
+    scale: "1-10"
+    criteria: >
+      The factory-produced skill contains technically accurate instructions.
+      No hallucinated APIs, wrong patterns, or incorrect behavior descriptions
+      compared to the reference skill.
+
+  - name: completeness
+    weight: 0.15
+    scale: "1-10"
+    criteria: >
+      The factory-produced skill covers the same scope as the reference.
+      All major sections, edge cases, and workflow steps from the reference
+      are present in the factory output.
+
+  - name: clarity
+    weight: 0.10
+    scale: "1-10"
+    criteria: >
+      A naive agent can follow the factory-produced skill without ambiguity.
+      Instructions are concrete, terminology is consistent, examples are actionable.
+
+  - name: consistency
+    weight: 0.10
+    scale: "1-10"
+    criteria: >
+      The factory-produced skill follows create-skill conventions: YAML frontmatter,
+      under 500 lines, progressive disclosure, one-level-deep references.
+
+  - name: research_quality
+    weight: 0.15
+    scale: "1-10"
+    criteria: >
+      The factory's research phase produces a dossier comparable in depth to the
+      case study's research notes. Key patterns from the source materials are
+      identified and distilled.
+
+  - name: rubric_quality
+    weight: 0.10
+    scale: "1-10"
+    criteria: >
+      The factory-generated rubric captures the quality dimensions that matter
+      for the domain. Criteria are falsifiable and measurable, not vague.
+
+  - name: process_quality
+    weight: 0.10
+    scale: "1-10"
+    criteria: >
+      The factory follows its own pipeline correctly: interview, research, draft,
+      autoresearch, verify. Artifacts are produced in the right structure.
+      Handoffs and craft-decisions are logged.
+
+  - name: outcome_match
+    weight: 0.15
+    scale: "1-10"
+    criteria: >
+      The factory-produced skill would serve equally well as the manually-built
+      reference skill for its intended purpose. An agent using either skill
+      would produce comparable output.
+
+target_score: 0.80
+max_iterations: 15
+plateau_window: 5
