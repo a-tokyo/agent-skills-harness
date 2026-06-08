@@ -103,10 +103,11 @@ independent subagent panel with evidence-based consensus (≈ 0.84 vs the 0.80 t
   create-skill-autoresearch/        #   the factory (the original deliverable)
   autoresearch/ production-grade/   #   companion skills (vendored — see Provenance)
   premortem/ handoff/ llm-council/  #   ...
-  documentation-writer/
+  documentation-writer/ design-taste-frontend/
 
 builds/                             # The skills this harness PRODUCES (gitignored; your work)
 self-test/                          # The factory's own regression test + worked example
+site/                               # Docs + landing site (Nextra → Vercel)
 docs/
   reference/io-contract.md          # what goes in / what comes out  ← start here
   reference/workspace-layout.md     # full file-by-file build layout
@@ -128,6 +129,7 @@ skills-lock.json                    # provenance + version pins for vendored ski
 - [Usage Guide](docs/usage-guide.md) — end-to-end walkthrough
 - [Architecture](docs/architecture.md) — design overview
 - [Rubric Format](docs/reference/rubric-format.md) · [METRIC Protocol](docs/reference/metric-protocol.md)
+- **Docs site**: a hosted [Nextra](https://nextra.site) site in [`site/`](site/) renders these same docs (single-sourced) and deploys to Vercel.
 
 ## Companion skills & provenance
 
@@ -145,6 +147,7 @@ With gratitude to the upstream authors:
 | `llm-council` | [am-will/codex-skills](https://github.com/am-will/codex-skills) |
 | `premortem` | [parcadei/continuous-claude-v3](https://github.com/parcadei/continuous-claude-v3) |
 | `production-grade` | [a-tokyo/agent-skills](https://github.com/a-tokyo/agent-skills) |
+| `design-taste-frontend` | [Leonxlnx/taste-skill](https://github.com/Leonxlnx/taste-skill) |
 
 The factory itself, `create-skill-autoresearch`, is also published standalone at
 [a-tokyo/agent-skills](https://github.com/a-tokyo/agent-skills)

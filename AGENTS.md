@@ -17,9 +17,11 @@ The core output is the `create-skill-autoresearch` factory skill, which orchestr
   handoff/                      # Context preservation across sessions (vendored)
   documentation-writer/         # Diataxis documentation generation (vendored)
   llm-council/                  # Multi-agent planning with consensus (vendored)
+  design-taste-frontend/        # Anti-slop frontend/UI skill (vendored)
 
 builds/                         # Skills the harness PRODUCES (gitignored; one folder per build)
 self-test/                      # The factory's own regression test + worked example
+site/                           # Docs + landing site (Nextra → Vercel)
 skills-lock.json                # Provenance + version pins for vendored skills
 
 docs/
@@ -44,6 +46,7 @@ docs/
 | `handoff` | Compact conversation into handoff document for another agent |
 | `documentation-writer` | Diataxis-guided documentation generation |
 | `llm-council` | Multi-agent planning with anonymized judging |
+| `design-taste-frontend` | Anti-slop frontend/UI design for landing pages and redesigns |
 
 ## Setup
 
