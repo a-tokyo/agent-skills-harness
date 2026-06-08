@@ -159,3 +159,12 @@ docs/study/personal-tokyo-skill-workspace-initial
 docs/study/agentic-3ps
 docs/study/guestquest-data-generator-feature-ship-readiness
 docs/study/lqa-docs
+
+# site (Nextra docs site)
+site/node_modules
+site/.next
+site/.vercel
+site/next-env.d.ts
+site/tsconfig.tsbuildinfo
+# generated docs — synced from the repo's canonical markdown at build (single source of truth)
+site/content/docs/*.md
