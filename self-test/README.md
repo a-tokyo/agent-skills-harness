@@ -61,7 +61,9 @@ benchmark in [`benchmarks/`](benchmarks/).
 ## What is actually verified
 
 - **Deterministic structural checks** (`autoresearch-evaluate.sh`): line count, YAML frontmatter,
-  cross-reference integrity, convention compliance.
+  cross-reference integrity, convention compliance. (The factory currently scores 67/68; the one miss
+  is an *advisory* "keep >25-line headroom" depth heuristic — the SKILL.md is 478/500 lines, well within
+  the hard limit, so this is a soft signal, not a defect.)
 - **Skill-vs-reference scoring** (`evaluate.sh`): the 8-dimension rubric via LLM-as-judge when
   `JUDGE_MODEL`/`JUDGE_API_KEY` are set; deterministic structural metrics only otherwise.
 - **Subagent-panel benchmark** (committed evidence): a fresh builder rebuilds a reference skill *blind*, and an

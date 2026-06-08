@@ -1,6 +1,6 @@
 # Cross-Cutting Patterns from All Case Studies
 
-Distilled from studying 6 skill-building efforts across different domains, teams, and tools.
+Distilled from studying five skill-building efforts across different domains, teams, and tools.
 
 ## The Universal Pipeline
 

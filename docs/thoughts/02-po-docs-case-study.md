@@ -1,6 +1,6 @@
 # Case Study: PO Product Documentation Skill
 
-Domain-workflow skill that replaces a weekly 1-hour SteerCo meeting with an AI-automated documentation pipeline. The most mature example of a skill with a built-in self-improvement loop.
+Domain-workflow skill that replaces a recurring manual product-documentation review with an AI-automated documentation pipeline. The most mature example of a skill with a built-in self-improvement loop.
 
 ## What Was Built
 
@@ -15,7 +15,7 @@ A multi-phase documentation skill (SKILL.md ~630 lines) that:
 
 ## Gold Standard Approach
 
-- **Source**: existing human-written Confluence documentation pages (C3.1 Brand Dashboard as primary gold standard, page ID 114655360)
+- **Source**: existing human-written documentation pages (a primary dashboard page used as the gold standard)
 - **Calibration**: before generating, the skill fetches 1-2 completed sibling pages to calibrate quality, depth, and style
 - **Comparison**: generated output compared visually and structurally against existing pages
 

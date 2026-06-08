@@ -80,17 +80,16 @@ with `npx skills`.
 
 ## Run the self-test
 
-The self-test benchmarks the factory against a tracked public case (`tokyo-production-grade`): it
-scores a **factory-produced** skill against the committed reference skill. So first run the factory on
-that case to produce `self-test/runs/tokyo-production-grade/skill/`, then:
+**Runs immediately on a fresh clone** — deterministic structural checks on the factory itself:
 
 ```bash
-cd self-test
-./evaluation/evaluate.sh tokyo-production-grade   # emits METRIC lines incl. overall_score
+bash self-test/evaluation/autoresearch-evaluate.sh   # 68 checks; emits METRIC lines incl. overall_score
 ```
 
-Without a judge configured (`JUDGE_MODEL` / `JUDGE_API_KEY`) it runs deterministic structural checks
-only; if no factory output exists yet it tells you to run the factory first. See
+The other script, `evaluation/evaluate.sh <case-id>`, scores a **factory-produced** skill against a
+gold-standard reference — so it needs a factory output first (run the factory on a case to produce
+`self-test/runs/<case>/skill/`). Without a judge (`JUDGE_MODEL` / `JUDGE_API_KEY`) it runs structural
+checks only, and that fallback `overall_score` is *not* comparable to the 0.80 LLM-judge target. See
 [`self-test/README.md`](self-test/README.md) for details.
 
 For a worked, committed benchmark — the factory rebuilding a reference skill *blind*, scored by an
