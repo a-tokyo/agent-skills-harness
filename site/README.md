@@ -39,4 +39,13 @@ Connect `a-tokyo/agent-skills-harness` as a Vercel project with:
 - **Build Command:** `npm run build` (the `prebuild` hook runs the doc sync)
 - **Install Command:** `npm install`
 
-Auto-deploys on push to `main`. No env vars required.
+Auto-deploys on push to `main`.
+
+**Env var (recommended):** set `NEXT_PUBLIC_SITE_URL` to the production URL (e.g. your Vercel domain or a
+custom domain). It drives `metadataBase` for absolute SEO URLs — canonical, Open Graph, Twitter card, the
+generated OG image, `robots.txt`, and `sitemap.xml`. Defaults to `https://agent-skills-harness.vercel.app`
+if unset.
+
+SEO is handled via the Next.js Metadata API in `app/layout.tsx` (title template, description, keywords,
+Open Graph + Twitter), a generated OG image (`app/opengraph-image.tsx`), favicon (`app/icon.svg`), plus
+`app/robots.ts` and `app/sitemap.ts`. Per-page `<title>`s come from each doc's frontmatter/heading.
