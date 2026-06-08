@@ -61,9 +61,26 @@ No build step required. Skills are markdown-based and used directly by any AI co
 - Skills live in `.agents/skills/<skill-name>/SKILL.md`
 - Skills follow the official skill-authoring rules (Anthropic best-practices; YAML frontmatter, < 500 lines, progressive disclosure, references one level deep) — see `.agents/skills/create-skill-autoresearch/references/skill-authoring-best-practices.md`
 - A factory run produces `builds/<skill-name>/` with three zones: `input/` (human materials), `work/` (generated artifacts), `output/<skill-name>/` (the finished skill). `builds/` is gitignored.
-- `create-skill-autoresearch` is developed here and published as a release to `a-tokyo/agent-skills`; copy it over on version bumps so the two don't diverge.
+- `create-skill-autoresearch` is developed here (source of truth) and published as a byte-identical release to `a-tokyo/agent-skills` — never edit the published copy directly. See "Releasing create-skill-autoresearch" below.
 - Research notes go in `docs/thoughts/` with numbered prefixes (00-, 01-, etc.)
 - Design decisions are logged in `docs/thoughts/07-design-questions.md`
+
+## Releasing create-skill-autoresearch
+
+The harness is the **source of truth** for the factory skill (it is developed and benchmarked here against
+`self-test/`). `a-tokyo/agent-skills` carries a **byte-identical published copy** for `npx skills` installs.
+The two are cross-linked (each README points to the other). To cut a release after editing the factory:
+
+1. Bump `version:` in `.agents/skills/create-skill-autoresearch/SKILL.md`.
+2. Re-sync the published copy as a whole directory (so `references/` can't silently drift):
+   ```bash
+   rm -rf ../agent-skills/skills/create-skill-autoresearch
+   cp -r .agents/skills/create-skill-autoresearch ../agent-skills/skills/create-skill-autoresearch
+   diff -rq .agents/skills/create-skill-autoresearch ../agent-skills/skills/create-skill-autoresearch  # must be empty
+   ```
+3. Commit in both repos (harness on `main`; `agent-skills` via a PR) and push.
+
+Never edit the `agent-skills` copy directly — edit here and re-sync, or the two diverge (as `production-grade` once did).
 
 ## Key Concepts
 
