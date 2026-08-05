@@ -80,9 +80,10 @@ benchmark in [`benchmarks/`](benchmarks/).
 ## What is actually verified
 
 - **Deterministic structural checks** (`autoresearch-evaluate.sh`): line count, YAML frontmatter,
-  cross-reference integrity, convention compliance. One check is expected to fail: an *advisory*
-  "keep >25 lines of headroom below the 500-line limit" depth heuristic. The factory body is within the
-  hard limit, so this is a soft signal, not a defect — run the script for the current
+  cross-reference integrity, convention compliance. Every reference must exist, be linked from
+  `SKILL.md`, and carry a `## Contents` list once it passes ~100 lines. The suite is expected to be
+  **fully green** — `npm test` wraps it in `gate.sh`, which fails on any failure not on a written
+  advisory list, and that list is currently empty on purpose. Run the script for the current
   `checks_passed`/`checks_total` rather than trusting a number quoted here.
 - **Skill-vs-reference scoring** (`evaluate.sh`): the 8-dimension rubric via LLM-as-judge when
   `JUDGE_MODEL`/`JUDGE_API_KEY` are set; deterministic structural metrics only otherwise.

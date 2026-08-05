@@ -17,6 +17,7 @@ The core output is the `create-skill-autoresearch` factory skill, which orchestr
   handoff/                      # Context preservation across sessions (vendored)
   documentation-writer/         # Diataxis documentation generation (vendored)
   llm-council/                  # Multi-agent planning with consensus (vendored)
+  writing-great-skills/         # Skill-writing craft (vendored)
   design-taste-frontend/        # Anti-slop frontend/UI skill (vendored)
 
 builds/                         # Skills the harness PRODUCES (gitignored; one folder per build)
@@ -46,6 +47,7 @@ docs/
 | `handoff` | Compact conversation into handoff document for another agent |
 | `documentation-writer` | Diataxis-guided documentation generation |
 | `llm-council` | Multi-agent planning with anonymized judging |
+| `writing-great-skills` | Skill-writing craft: leading words, information hierarchy, description quality |
 | `design-taste-frontend` | Anti-slop frontend/UI design for landing pages and redesigns |
 
 ## Setup
@@ -57,7 +59,11 @@ npm install
 git submodule update --init --recursive   # docs/resources/ reference implementations
 ```
 
-No build step required. Skills are markdown-based and used directly by any AI coding agent that supports the SKILL.md format. The vendored skills are committed, so a fresh clone works offline; run `npm run skills:update` to refresh them from `skills-lock.json`.
+No build step required. Skills are markdown-based and used directly by any AI coding agent that supports the SKILL.md format. The vendored skills are committed, so a fresh clone works offline.
+
+To refresh a vendored skill, scope it: `npx skills update <skill-name>`. `npm run skills:refresh-all` does every one of them from each upstream's current HEAD and rewrites the lock entries — review that diff before committing, since an upstream edit changes how a companion behaves. `skills-lock.json` records provenance and a content hash; it is not a pin the CLI restores you to.
+
+`npm test` runs the regression gate (`self-test/evaluation/gate.sh`): the structural checks, with a short written allowlist of advisory failures. It needs no credentials and no network.
 
 ## Development Conventions
 

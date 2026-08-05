@@ -24,6 +24,7 @@ const DOCS = [
   { src: 'docs/reference/rubric-format.md', route: 'rubric-format' },
   { src: 'docs/reference/tuning.md', route: 'tuning' },
   { src: 'docs/reference/metric-protocol.md', route: 'metric-protocol' },
+  { src: 'docs/benchmarking.md', route: 'benchmarking' },
   { src: 'self-test/benchmarks/premortem-rebuild.md', route: 'benchmark' },
   {
     src: '.agents/skills/create-skill-autoresearch/references/skill-authoring-best-practices.md',

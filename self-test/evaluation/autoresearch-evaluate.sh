@@ -79,10 +79,31 @@ check structural "Autoresearch has YAML frontmatter" $(head -1 "$AUTORESEARCH_SK
 dim_crossref_max=0
 
 # Check factory references resolve
-for ref in "references/pipeline-phases.md" "references/rubric-templates.md" "references/consensus-protocol.md"; do
+for ref in "references/pipeline-phases.md" "references/rubric-templates.md" "references/consensus-protocol.md" \
+           "references/skill-authoring-best-practices.md" "references/skill-craft-principles.md" \
+           "references/benchmark-standard.md" "references/publishing.md"; do
   dim_crossref_max=$((dim_crossref_max + 1))
   FULL_PATH=".agents/skills/create-skill-autoresearch/$ref"
   check crossref "Factory ref $ref exists" $([ -f "$FULL_PATH" ] && echo 1 || echo 0)
+done
+
+# Every reference must be reachable from SKILL.md — an orphan reference is dead weight the
+# model never loads, and a link to a missing file is worse.
+for ref in .agents/skills/create-skill-autoresearch/references/*.md; do
+  base="references/$(basename "$ref")"
+  dim_crossref_max=$((dim_crossref_max + 1))
+  check crossref "SKILL.md links $base" \
+    $(grep -qF "$base" "$FACTORY_SKILL" && echo 1 || echo 0)
+done
+
+# A reference over ~100 lines needs a Contents list, so a partial read still shows full scope.
+for ref in .agents/skills/create-skill-autoresearch/references/*.md; do
+  ref_lines=$(wc -l < "$ref")
+  if [ "$ref_lines" -gt 100 ]; then
+    dim_crossref_max=$((dim_crossref_max + 1))
+    check crossref "$(basename "$ref") ($ref_lines lines) has a Contents TOC" \
+      $(grep -qE '^## Contents' "$ref" && echo 1 || echo 0)
+  fi
 done
 
 # Check docs cross-refs
