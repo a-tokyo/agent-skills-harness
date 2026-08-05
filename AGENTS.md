@@ -18,6 +18,7 @@ The core output is the `create-skill-autoresearch` factory skill, which orchestr
   documentation-writer/         # Diataxis documentation generation (vendored)
   llm-council/                  # Multi-agent planning with consensus (vendored)
   writing-great-skills/         # Skill-writing craft (vendored)
+  tribunal/                     # Phase 5 verification when delegated (vendored)
   design-taste-frontend/        # Anti-slop frontend/UI skill (vendored)
 
 builds/                         # Skills the harness PRODUCES (gitignored; one folder per build)
@@ -48,6 +49,7 @@ docs/
 | `documentation-writer` | Diataxis-guided documentation generation |
 | `llm-council` | Multi-agent planning with anonymized judging |
 | `writing-great-skills` | Skill-writing craft: leading words, information hierarchy, description quality |
+| `tribunal` | Doer → verifier-panel → consensus verification; the factory delegates Phase 5 to it when present |
 | `design-taste-frontend` | Anti-slop frontend/UI design for landing pages and redesigns |
 
 ## Setup

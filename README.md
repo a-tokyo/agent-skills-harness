@@ -174,6 +174,7 @@ independent subagent panel with evidence-based consensus (≈ 0.84 vs a 0.80 tar
   autoresearch/ production-grade/   #   companion skills (vendored — see Provenance)
   premortem/ handoff/ llm-council/  #   ...
   writing-great-skills/             #   craft layer behind the factory's skill-craft-principles
+  tribunal/                         #   Phase 5 verification, when delegated
   documentation-writer/ design-taste-frontend/
 
 builds/                             # The skills this harness PRODUCES (gitignored; your work)
@@ -233,7 +234,7 @@ With gratitude to the upstream authors:
 | `handoff`, `writing-great-skills` | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | `llm-council` | [am-will/codex-skills](https://github.com/am-will/codex-skills) |
 | `premortem` | [parcadei/continuous-claude-v3](https://github.com/parcadei/continuous-claude-v3) |
-| `production-grade` | [a-tokyo/agent-skills](https://github.com/a-tokyo/agent-skills) |
+| `production-grade`, `tribunal` | [a-tokyo/agent-skills](https://github.com/a-tokyo/agent-skills) |
 | `design-taste-frontend` | [Leonxlnx/taste-skill](https://github.com/Leonxlnx/taste-skill) |
 
 The factory itself, `create-skill-autoresearch`, is also published standalone at

@@ -41,7 +41,13 @@
       "source": "a-tokyo/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/production-grade/SKILL.md",
-      "computedHash": "7f0f6ad7b792d0eab3d3c37fd299558b9dfb15e544c405b102cb92b503d664ab"
+      "computedHash": "13f7178ab27dc7f30bbc7b5c807a22dd2035edcc4075da21780f8acd89695a6d"
+    },
+    "tribunal": {
+      "source": "a-tokyo/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/tribunal/SKILL.md",
+      "computedHash": "97136b965b74045123b10f2742c402855a3c95ad6e49e9732bd03e0139f485c7"
     },
     "writing-great-skills": {
       "source": "mattpocock/skills",
