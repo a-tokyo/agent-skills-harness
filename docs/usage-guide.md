@@ -123,11 +123,30 @@ builds/<skill-name>/output/<skill-name>/
   references/           # If needed
 ```
 
-Copy this directory to your target project's `.agents/skills/` (or `~/.cursor/skills/`), or into a skills repo's `skills/` to publish:
+To **use** it locally, copy that directory into your project's `.agents/skills/` (or `~/.cursor/skills/`).
+
+To **publish** it, a copy is not enough — a skill nobody's registry lists is invisible, and a version
+that disagrees with its registry entry installs the wrong thing:
 
 ```bash
 cp -r builds/<skill-name>/output/<skill-name> <your-skills-repo>/skills/
 ```
+
+then work through the checklist in
+[`.agents/skills/create-skill-autoresearch/references/publishing.md`](../.agents/skills/create-skill-autoresearch/references/publishing.md):
+catalogue row, plugin-marketplace entry with a `version` matching the frontmatter, and the uplift
+benchmark at `benchmarks/<skill-name>/` — outside `skills/`, so it does not ship on install.
+
+Before calling it shipped, make sure it earned its place: [benchmarking.md](benchmarking.md).
+
+### Bringing an existing skill or collection in
+
+Migrating skills you already have is a first-class path, not a special case. Point the factory at them
+and it treats each as **both a study material and a baseline**: it researches what they already encode,
+measures them against the rubric, and improves from there instead of starting from a blank page. Put the
+existing skill files in `input/` alongside your gold standards, and answer the Phase 1 existing-skill
+question — that sets the run to **upgrade** mode. You get a measured before-and-after rather than a
+rewrite you have to take on faith.
 
 ## Workspace Layout
 
