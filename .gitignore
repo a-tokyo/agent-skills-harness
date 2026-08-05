@@ -155,10 +155,9 @@ self-test/runs/
 
 # docs
 docs/local
-docs/study/personal-tokyo-skill-workspace-initial
-docs/study/agentic-3ps
-docs/study/guestquest-data-generator-feature-ship-readiness
-docs/study/lqa-docs
+# Maintainer-local case-study material. Ignored as a whole directory on purpose:
+# naming each subdirectory individually left a newly added one tracked by default.
+docs/study/
 
 # site (Nextra docs site)
 site/node_modules
@@ -168,3 +167,11 @@ site/next-env.d.ts
 site/tsconfig.tsbuildinfo
 # generated docs — synced from the repo's canonical markdown at build (single source of truth)
 site/content/docs/*.md
+
+# Scratch area — notes, transcripts, and working files pulled in while working on the
+# harness. Never tracked: this repo pushes to public remotes.
+tmp/
+
+# Local convenience mirror: .claude/skills/* are symlinks into .agents/skills/,
+# which is the tracked source of truth.
+.claude/skills/

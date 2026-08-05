@@ -72,7 +72,13 @@ The factory invokes the `autoresearch` skill with your evaluation pipeline:
 - Improvements are kept, regressions are reverted
 - Every experiment logs a hypothesis, result, and insight
 
-The loop runs autonomously until the budget is exhausted or a plateau is detected.
+The loop runs autonomously until it reaches `target_score`, exhausts `max_iterations`, or you stop it.
+A detected plateau is reported as an alert; it does not by itself end the loop.
+
+> **If the run keeps asking to iterate and the score is not moving**, the target is probably set higher
+> than this task can reach. That is a configuration question, not a failure — see
+> [reference/tuning.md](reference/tuning.md#when-the-loop-will-not-stop) for which field to change and
+> how to lock a baseline and move on.
 
 ### What You See During Autoresearch
 
@@ -83,7 +89,8 @@ The factory tracks progress in:
 
 ### When to Intervene
 
-- **Plateau detected**: The factory alerts you when N consecutive experiments fail to improve. Consider providing new directions or adjusting the rubric.
+- **Plateau detected**: The factory alerts you when N consecutive experiments fail to improve. Consider providing new directions or adjusting the rubric. First check whether the remaining gap is smaller than judge variance (0.2-0.3 points on a 1-10 scale) — if so the skill is at the measurement ceiling and more iterations cannot help.
+- **The loop won't converge**: lower `target_score` in `work/evaluation/rubric.yaml` to the achievable band, or lock the baseline and proceed — [reference/tuning.md](reference/tuning.md#locking-a-baseline). A result at `target_score - 0.10` is a legitimate SHIP WITH CAVEATS, not a failure.
 - **Context limit**: The factory writes a handoff document and creates a `state.yaml` for seamless resume in a new session.
 
 ## Step 6: Verification (Phase 5)

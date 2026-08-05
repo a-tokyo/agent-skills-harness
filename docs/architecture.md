@@ -110,6 +110,26 @@ The evaluation pipeline:
 4. Scores each rubric dimension independently
 5. Emits `METRIC <dimension>=<score>` lines for the autoresearch skill to parse
 
+### Why the factory writes a script instead of judging inline
+
+Committing the measurement to a **script** — `evaluate.sh`, plus whatever Python or shell it needs — is
+a deliberate design choice, not an artifact of the implementation. An agent asked to score its own work
+inline will score it differently each time, and an improvement loop built on a metric that drifts
+optimizes noise. A script pins the measurement: same input, same number, every run, and a diff shows
+exactly when the bar moved. It also makes the deterministic parts genuinely deterministic — line
+counts, frontmatter validation, link integrity and pattern coverage need no model at all, so the judge
+is reserved for what actually requires judgment.
+
+The same reasoning drives the [METRIC protocol](reference/metric-protocol.md): a scalar on stdout is
+something the loop can compare across experiments, where prose is not.
+
+### What the loop optimizes, and what it does not
+
+`overall_score` is **absolute** output quality against your gold standards. It is not a measure of how
+much the skill helps — that is uplift, measured by a separate benchmark with a bare arm and a
+with-skill arm. Reading effectiveness off the loop's metric is a common mistake; see
+[tuning.md](reference/tuning.md#two-questions-two-instruments).
+
 ## Consensus Protocol
 
 The verification panel uses a structured protocol inspired by academic research on multi-agent deliberation.

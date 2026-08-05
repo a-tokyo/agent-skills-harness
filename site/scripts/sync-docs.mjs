@@ -22,6 +22,7 @@ const DOCS = [
   { src: 'docs/usage-guide.md', route: 'usage-guide' },
   { src: 'docs/architecture.md', route: 'architecture' },
   { src: 'docs/reference/rubric-format.md', route: 'rubric-format' },
+  { src: 'docs/reference/tuning.md', route: 'tuning' },
   { src: 'docs/reference/metric-protocol.md', route: 'metric-protocol' },
   { src: 'self-test/benchmarks/premortem-rebuild.md', route: 'benchmark' },
   {

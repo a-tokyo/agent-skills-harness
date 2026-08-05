@@ -5,6 +5,7 @@ export default {
   'usage-guide': 'Usage Guide',
   architecture: 'Architecture',
   'rubric-format': 'Rubric Format',
+  tuning: 'Tuning a Run',
   'metric-protocol': 'METRIC Protocol',
   benchmark: 'Benchmark',
   'skill-authoring-best-practices': 'Skill-Authoring Best Practices'

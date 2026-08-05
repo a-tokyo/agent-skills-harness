@@ -65,11 +65,22 @@ writes its derived index to `work/manifest.yaml` for you to confirm or correct.
 
 ### work/ — what the factory generates
 
-The lab notebook. None of it ships. Subdirectories:
+The lab notebook. None of it ships.
+
+**Four files here are yours to correct at phase boundaries**, even though the factory writes them
+first: `manifest.yaml`, `evaluation/rubric.yaml` (which holds the exit criteria),
+`evaluation/judges.yaml` and `evaluation/data-split.yaml`. Everything else is derived from those and
+gets rewritten, so edit the inputs rather than the outputs. See [tuning.md](tuning.md).
+
+**No credentials in any of these files.** Anything under `work/` may be committed when you run the
+factory inside your own project repo (see [Git Tracking](#git-tracking)), so a key written into
+`judges.yaml` becomes a key in your git history. Credentials belong in the environment.
+
+Subdirectories:
 
 - `manifest.yaml` — the factory's index of the gold standards found in `input/`, tagged train/validation/test.
 - `research/` — Phase 2 notes from parallel subagent exploration. `00-synthesis.md` is the cross-cutting synthesis (read first); numbered notes correspond to study-material clusters.
-- `evaluation/` — the scoring infrastructure: `rubric.yaml` (dimensions, weights, criteria), `evaluate.sh` (the script autoresearch calls), the optional `evaluate-checks.sh` correctness gate, `judges.yaml` (multi-judge config), and `data-split.yaml` (which gold standards are training vs held out).
+- `evaluation/` — the scoring infrastructure: `rubric.yaml` (dimensions, weights, criteria, and the exit criteria `target_score`/`max_iterations`/`plateau_window`), `evaluate.sh` (the script autoresearch calls), the optional `evaluate-checks.sh` correctness gate, `judges.yaml` (judge models and weights — names only, never a credential), and `data-split.yaml` (which gold standards are training vs held out).
 - `experiments/` — all experimentation artifacts: `DESIGN.md` (structural decisions locked before the first draft), `craft-decisions.md` (per-iteration ledger), the autoresearch session files, and `run.log`.
 - `handoffs/` — cross-session continuity (`state.yaml` for automatic resume, `HANDOFF-*.md` for rich human-readable context).
 
@@ -124,7 +135,7 @@ preserve the build.
 | `work/research/*.md` | Yes | Reproducible evidence |
 | `work/evaluation/rubric.yaml` | Yes | Scoring definition |
 | `work/evaluation/evaluate.sh` | Yes | Evaluation logic |
-| `work/evaluation/judges.yaml` | Yes (if present) | Multi-judge config |
+| `work/evaluation/judges.yaml` | Yes (if present) | Multi-judge config — **model names and weights only; a credential here would be committed** |
 | `work/experiments/DESIGN.md` | Yes | Design contract |
 | `work/experiments/craft-decisions.md` | Yes | Iteration history |
 | `work/experiments/autoresearch.md` | No | Session-specific |

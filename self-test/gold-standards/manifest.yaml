@@ -2,11 +2,16 @@
 # Each case study represents a successful skill build with known quality outcomes.
 # The factory should be able to reproduce comparable results given the same inputs.
 #
-# PUBLIC CLONE NOTE: Only the `tokyo-production-grade` case is runnable on a fresh clone.
-# Its reference_skill points to a committed file in this repo (.agents/skills/production-grade/SKILL.md).
-# All other cases are documented historical references; their source materials exist only
-# in the maintainer's private environment and are not included in this repository.
-# input_materials is set to null for any path that is gitignored or otherwise absent here.
+# PUBLIC CLONE NOTE: no case here is runnable end-to-end on a fresh clone — every
+# `input_materials` is null, because the source materials existed only in the maintainer's private
+# environment and are not in this repository. These entries are historical provenance.
+#
+# `tokyo-production-grade` is the one case that is still useful here: its `reference_skill` points at
+# a committed file (.agents/skills/production-grade/SKILL.md), so it can serve as a SCORING TARGET for
+# a skill you produce yourself. It is not a runnable build.
+#
+# To run the pipeline end-to-end, add your own case with a real `input_materials` path — see
+# ../README.md. For the credential-free regression gate, run evaluation/autoresearch-evaluate.sh.
 
 cases:
   - id: tokyo-production-grade
@@ -16,7 +21,7 @@ cases:
     evaluation_method: "12-gate quality bar"
     final_outcome: "All 12 gates green, 170-line body, 9 reference files"
     tags: ["test"]
-    notes: "Deepest case study. Research dossier + multi-gate quality bar. Runnable: reference_skill is committed."
+    notes: "Deepest case study. Research dossier + multi-gate quality bar. Usable as a scoring target (reference_skill is committed); not a runnable build (input_materials absent)."
 
   - id: documentation-workflow
     domain: "Product documentation workflow"

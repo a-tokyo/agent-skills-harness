@@ -16,10 +16,29 @@ See `gold-standards/manifest.yaml` for the full list. Each case study has:
 
 ## Running a Self-Test
 
-1. Pick a case study from the manifest (e.g., `tokyo-production-grade`)
-2. Run the factory on that case study's input materials
-3. The factory produces output in `runs/<case-id>/skill/`
-4. Run `./evaluation/evaluate.sh <case-id>` to compare against the reference
+**Start here — this one runs on a fresh clone, offline, with no credentials:**
+
+```bash
+bash evaluation/autoresearch-evaluate.sh   # structural checks on the factory itself
+```
+
+It needs only `bash` and `python3`, and prints `METRIC checks_passed` / `METRIC checks_total` plus an
+issues list. That is the regression gate for any change to the factory.
+
+**Scoring a produced skill against a reference** is the other script, and it needs a case you can
+actually run. The cases in `gold-standards/manifest.yaml` all carry `input_materials: null` — their
+source materials were private to the factory's original development and are not in this repo — so
+**pick your own case rather than one from the manifest**:
+
+1. Add a case to `gold-standards/manifest.yaml` with a real `input_materials` path and a
+   `reference_skill` to score against. (`tokyo-production-grade` is the one whose `reference_skill`
+   resolves here — `.agents/skills/production-grade/SKILL.md` — but its inputs are still absent, so it
+   is a scoring target, not a runnable build.)
+2. Run the factory on that case's input materials.
+3. The factory produces output in `runs/<case-id>/skill/`.
+4. Run `./evaluation/evaluate.sh <case-id>` to compare against the reference. Set
+   `JUDGE_MODEL`/`JUDGE_API_KEY`/`JUDGE_API_BASE` for judge scoring; without them you get structural
+   checks only, and that score is not comparable to the 0.80 judge-scored target.
 
 ## Evaluation
 
@@ -61,9 +80,10 @@ benchmark in [`benchmarks/`](benchmarks/).
 ## What is actually verified
 
 - **Deterministic structural checks** (`autoresearch-evaluate.sh`): line count, YAML frontmatter,
-  cross-reference integrity, convention compliance. (The factory currently scores 67/68; the one miss
-  is an *advisory* "keep >25-line headroom" depth heuristic — the SKILL.md is 478/500 lines, well within
-  the hard limit, so this is a soft signal, not a defect.)
+  cross-reference integrity, convention compliance. One check is expected to fail: an *advisory*
+  "keep >25 lines of headroom below the 500-line limit" depth heuristic. The factory body is within the
+  hard limit, so this is a soft signal, not a defect — run the script for the current
+  `checks_passed`/`checks_total` rather than trusting a number quoted here.
 - **Skill-vs-reference scoring** (`evaluate.sh`): the 8-dimension rubric via LLM-as-judge when
   `JUDGE_MODEL`/`JUDGE_API_KEY` are set; deterministic structural metrics only otherwise.
 - **Subagent-panel benchmark** (committed evidence): a fresh builder rebuilds a reference skill *blind*, and an
