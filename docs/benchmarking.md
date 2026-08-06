@@ -30,10 +30,9 @@ from that. A benchmark arm is usually a single pass — no panel, no retry. **A 
 panel-retry arm are measuring different systems**, so a single-pass benchmark systematically
 understates a skill whose value shows up under retry.
 
-Every number published in this project today was measured **single-pass**, and says so. Nothing has
-been re-scored to look better. The fix is a third arm — bare / skill / skill+panel — so the skill's
-contribution and the panel's are separated rather than confused; until those arms exist, read the
-published figures as a floor.
+**A published arm is single-pass unless its benchmark README states otherwise**, and nothing is
+re-scored to look better. The fix is a third arm — bare / skill / skill+panel — so the skill's
+contribution and the panel's are separated rather than confused; read a single-pass figure as a floor.
 
 ## What this project has measured
 

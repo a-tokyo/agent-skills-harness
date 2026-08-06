@@ -19,7 +19,7 @@ jobs:
     name: self-test gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The gate runs the structural checks and fails on any failure not on its written advisory
       # list. It compares the issues, not the check count — new checks raise the total, so comparing
@@ -38,11 +38,11 @@ jobs:
     # registry, with no way to clear it. Point PARITY_TARGET at your own registry to re-enable it.
     if: github.repository == 'a-tokyo/agent-skills-harness'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: harness
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: a-tokyo/agent-skills
           path: published
