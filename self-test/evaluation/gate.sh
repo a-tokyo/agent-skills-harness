@@ -31,7 +31,9 @@ ADVISORY_RE=''
 # you add checks; lowering it is retiring coverage and needs the same scrutiny as ADVISORY_RE.
 MIN_CHECKS=85
 
-WORK="$(mktemp -d)"
+# Explicit template: bare `mktemp -d` works on GNU and on current macOS, but older BSD mktemp wants one.
+# Costs nothing to be unambiguous in a script that advertises portability.
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/harness-gate.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
 if ! bash "$HERE/autoresearch-evaluate.sh" >"$WORK/out.txt" 2>&1; then

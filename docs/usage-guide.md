@@ -72,8 +72,11 @@ The factory invokes the `autoresearch` skill with your evaluation pipeline:
 - Improvements are kept, regressions are reverted
 - Every experiment logs a hypothesis, result, and insight
 
-The loop runs autonomously until it reaches `target_score`, exhausts `max_iterations`, or you stop it.
-A detected plateau is reported as an alert; it does not by itself end the loop.
+The loop runs autonomously. Since factory v0.2.0 it ends when it reaches `target_score`, when a plateau
+sits **inside judge variance** (further gains are not measurable, so Phase 4 stops and hands the
+best-so-far result to Phase 5), when `max_iterations` is exhausted, or when you stop it. On v0.1.0 a
+plateau was only an advisory alert and did not end the loop — which is why an unreachable target could
+run the budget out.
 
 > **If the run keeps asking to iterate and the score is not moving**, the target is probably set higher
 > than this task can reach. That is a configuration question, not a failure — see
