@@ -4,7 +4,7 @@ The deepest and most mature example of skill creation in the portfolio. Built ac
 
 ## What Was Built
 
-A portable, evergreen Cursor/Claude skill named `production-grade` (originally `tokyo`) that encodes principle-engineering posture: 4 meta-rules + 15 operating rules + 9 reference files. ~170 lines in the body, ~200 lines per reference.
+A portable, evergreen Cursor/Claude skill named `production-grade` (originally `tokyo`) that encodes principle-engineering posture: 4 meta-rules + 15 operating rules + 9 reference files. ~170 lines in the body, ~200 lines per reference. *(Figures describe the skill as originally built. It has shipped several versions since — read current counts from `.agents/skills/production-grade/`, not from this note.)*
 
 ## The Process
 

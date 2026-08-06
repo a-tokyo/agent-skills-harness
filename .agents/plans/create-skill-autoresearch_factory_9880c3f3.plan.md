@@ -122,7 +122,7 @@ Key constraint: BUILDER and PANEL never share context. Panel receives only: skil
 
 ## Locked Design Decisions (D1-D18)
 
-All decisions documented in [docs/thoughts/07-design-questions.md](docs/thoughts/07-design-questions.md). Key ones:
+All decisions documented in [docs/thoughts/07-design-questions.md](../../docs/thoughts/07-design-questions.md). Key ones:
 
 - **D4**: 4-role agent topology (Orchestrator, Researcher, Builder, Panel)
 - **D5**: Structured consensus with synthesis round and escalation
@@ -185,7 +185,7 @@ docs/
 
 ### Phase 0 -- Enhance Autoresearch Skill
 
-First, upgrade [`.agents/skills/autoresearch/SKILL.md`](.agents/skills/autoresearch/SKILL.md) with battle-tested patterns from [`docs/resources/pi-autoresearch`](docs/resources/pi-autoresearch). This benefits ALL skill users, not just the factory.
+First, upgrade [`.agents/skills/autoresearch/SKILL.md`](../../.agents/skills/autoresearch/SKILL.md) with battle-tested patterns from [`docs/resources/pi-autoresearch`](../../docs/resources/pi-autoresearch). This benefits ALL skill users, not just the factory.
 
 **Enhancements to port from pi-autoresearch:**
 
@@ -215,29 +215,29 @@ Build the end-to-end pipeline with a single LLM judge. This gets a working facto
 
 **Files to create:**
 
-- [`.agents/skills/create-skill-autoresearch/SKILL.md`](.agents/skills/create-skill-autoresearch/SKILL.md) -- the factory skill, following create-skill conventions (< 500 lines, third-person description with "Use when..." trigger, YAML frontmatter with `name` + `description`)
+- [`.agents/skills/create-skill-autoresearch/SKILL.md`](../../.agents/skills/create-skill-autoresearch/SKILL.md) -- the factory skill, following create-skill conventions (< 500 lines, third-person description with "Use when..." trigger, YAML frontmatter with `name` + `description`)
 
-- [`.agents/skills/create-skill-autoresearch/references/pipeline-phases.md`](.agents/skills/create-skill-autoresearch/references/pipeline-phases.md) -- detailed instructions for each of the 5 phases
+- [`.agents/skills/create-skill-autoresearch/references/pipeline-phases.md`](../../.agents/skills/create-skill-autoresearch/references/pipeline-phases.md) -- detailed instructions for each of the 5 phases
 
-- [`.agents/skills/create-skill-autoresearch/references/rubric-templates.md`](.agents/skills/create-skill-autoresearch/references/rubric-templates.md) -- universal rubric dimensions + domain-specific templates
+- [`.agents/skills/create-skill-autoresearch/references/rubric-templates.md`](../../.agents/skills/create-skill-autoresearch/references/rubric-templates.md) -- universal rubric dimensions + domain-specific templates
 
 **Documentation and project files:**
 
-- [`AGENTS.md`](AGENTS.md) -- agent-facing project context. Covers: project overview, setup commands, skill locations and descriptions, development conventions, testing instructions, how skills are structured.
+- [`AGENTS.md`](../../AGENTS.md) -- agent-facing project context. Covers: project overview, setup commands, skill locations and descriptions, development conventions, testing instructions, how skills are structured.
 
-- [`README.md`](README.md) -- update from current 1-liner to a proper project README:
+- [`README.md`](../../README.md) -- update from current 1-liner to a proper project README:
   - What this repo is (skill creation factory + harness)
   - Quick start (how to invoke the factory skill)
   - Repository structure overview (`.agents/skills/`, `docs/study/`, `docs/resources/`, `docs/thoughts/`)
   - Links to detailed docs
 
 - `docs/` user-facing documentation:
-  - [`docs/usage-guide.md`](docs/usage-guide.md) -- end-to-end walkthrough of using the factory: prerequisites, invoking the skill, what the interview asks, what research produces, how autoresearch runs, what ships at the end. Include a concrete example flow.
-  - [`docs/architecture.md`](docs/architecture.md) -- design overview with mermaid diagrams (reuse from plan), agent roles, phase pipeline, decision rationale. Links to [docs/thoughts/07-design-questions.md](docs/thoughts/07-design-questions.md) for full decision log.
-  - [`docs/reference/rubric-format.md`](docs/reference/rubric-format.md) -- rubric YAML schema, universal dimensions, how to add domain-specific dimensions, scoring scales
-  - [`docs/reference/metric-protocol.md`](docs/reference/metric-protocol.md) -- METRIC line format, ASI fields, evaluate.sh contract, checks.sh contract
-  - [`docs/reference/workspace-layout.md`](docs/reference/workspace-layout.md) -- what the factory creates per skill build (research/, gold-standards/, evaluation/, experiments/, skill/, handoffs/)
-  - Update [`docs/thoughts/README.md`](docs/thoughts/README.md) to include pointers to the new docs and note its role as research/study notes (separate from user-facing docs)
+  - [`docs/usage-guide.md`](../../docs/usage-guide.md) -- end-to-end walkthrough of using the factory: prerequisites, invoking the skill, what the interview asks, what research produces, how autoresearch runs, what ships at the end. Include a concrete example flow.
+  - [`docs/architecture.md`](../../docs/architecture.md) -- design overview with mermaid diagrams (reuse from plan), agent roles, phase pipeline, decision rationale. Links to [docs/thoughts/07-design-questions.md](../../docs/thoughts/07-design-questions.md) for full decision log.
+  - [`docs/reference/rubric-format.md`](../../docs/reference/rubric-format.md) -- rubric YAML schema, universal dimensions, how to add domain-specific dimensions, scoring scales
+  - [`docs/reference/metric-protocol.md`](../../docs/reference/metric-protocol.md) -- METRIC line format, ASI fields, evaluate.sh contract, checks.sh contract
+  - [`docs/reference/workspace-layout.md`](../../docs/reference/workspace-layout.md) -- what the factory creates per skill build (research/, gold-standards/, evaluation/, experiments/, skill/, handoffs/)
+  - Update [`docs/thoughts/README.md`](../../docs/thoughts/README.md) to include pointers to the new docs and note its role as research/study notes (separate from user-facing docs)
 
 **SKILL.md body structure (target ~300 lines):**
 
@@ -269,7 +269,7 @@ Add the Panel with structured consensus and devils advocate.
 
 **Files to create/modify:**
 
-- [`.agents/skills/create-skill-autoresearch/references/consensus-protocol.md`](.agents/skills/create-skill-autoresearch/references/consensus-protocol.md) -- Panel roles, scoring protocol, synthesis round, escalation rules
+- [`.agents/skills/create-skill-autoresearch/references/consensus-protocol.md`](../../.agents/skills/create-skill-autoresearch/references/consensus-protocol.md) -- Panel roles, scoring protocol, synthesis round, escalation rules
 
 - Update `SKILL.md` Phase 5 to spawn Panel subagents
 

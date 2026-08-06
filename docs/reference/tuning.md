@@ -136,9 +136,9 @@ structural reason:
 - **In a benchmark**, the skill arm is a single pass. No panel, no retry.
 
 The two arms are measuring different systems, so a single-pass benchmark systematically understates a
-skill whose value shows up under retry. Every benchmark number published in this project today was
-measured **single-pass** and is labelled as such; none has been re-scored to look better. Adding
-retry-parity arms — bare / skill / skill+panel — is planned, and only then do the numbers change.
+skill whose value shows up under retry. **A published arm is single-pass unless its benchmark README
+states otherwise**, and nothing is re-scored to look better. Retry-parity arms — bare / skill /
+skill+panel — are what change the numbers.
 
 If your team's lived experience says a skill is effective and a single-pass benchmark says the uplift
 is small, both can be true.

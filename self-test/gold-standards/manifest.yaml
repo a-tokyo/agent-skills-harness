@@ -18,8 +18,11 @@ cases:
     domain: "Engineering posture / coding principles"
     input_materials: null  # source materials from the original skill build are not in this repo
     reference_skill: ".agents/skills/production-grade/SKILL.md"
-    evaluation_method: "12-gate quality bar"
-    final_outcome: "All 12 gates green, 170-line body, 9 reference files"
+    evaluation_method: "12-gate quality bar (authoring-time: description length, body lines, name and
+      banned-phrase scans, lint — distinct from the skill's own runtime self-verification gate)"
+    final_outcome: "All 12 gates green. Body-line and reference-file counts deliberately not restated
+      here: they drift on every re-vendor and this note went stale unnoticed once already. Read them
+      from .agents/skills/production-grade/ instead."
     tags: ["test"]
     notes: "Deepest case study. Research dossier + multi-gate quality bar. Usable as a scoring target (reference_skill is committed); not a runnable build (input_materials absent)."
 

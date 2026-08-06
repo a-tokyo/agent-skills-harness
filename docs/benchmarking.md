@@ -3,7 +3,7 @@
 How to tell whether a skill earns its place, and how to read the numbers this project publishes.
 
 The standard itself lives with the factory, in
-[`skill-benchmark-standard.md`](../.agents/skills/create-skill-autoresearch/references/benchmark-standard.md) —
+[`benchmark-standard.md`](../.agents/skills/create-skill-autoresearch/references/benchmark-standard.md) —
 that file travels with the skill when someone installs it, so it is the single source. This page is
 the harness-side summary: the shape of the standard, how to run one here, and the two caveats that
 decide whether a number means anything.
