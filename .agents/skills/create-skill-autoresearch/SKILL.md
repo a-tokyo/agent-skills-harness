@@ -316,8 +316,8 @@ budget and reports "exit criteria not met" -- forever. Override that:
 If the autoresearch session exceeds context limits or the experiment budget:
 1. Invoke the **handoff skill** to generate `work/handoffs/HANDOFF-<session>.md`
 2. Write `work/handoffs/state.yaml` with structured resume state — phase, session counter, best score
-   and commit, experiments run, remaining budget, top concerns, blocked dimensions (full schema in
-   [references/pipeline-phases.md](references/pipeline-phases.md))
+   and commit, experiments run, remaining budget, validation score, top concerns, blocked dimensions,
+   and `baseline_lock` (full schema in [references/pipeline-phases.md](references/pipeline-phases.md))
 3. The next session reads `state.yaml` to resume from the correct phase
 
 ### 4.5 Resume Protocol
