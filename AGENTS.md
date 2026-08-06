@@ -65,7 +65,7 @@ No build step required. Skills are markdown-based and used directly by any AI co
 
 To refresh a vendored skill, scope it: `npx skills update <skill-name>`. `npm run skills:refresh-all` does every one of them from each upstream's current HEAD and rewrites the lock entries — review that diff before committing, since an upstream edit changes how a companion behaves. `skills-lock.json` records provenance and a content hash; it is not a pin the CLI restores you to.
 
-`npm test` runs the regression gate (`self-test/evaluation/gate.sh`): the structural checks, with a short written allowlist of advisory failures. It needs no credentials and no network.
+`npm test` runs the regression gate (`self-test/evaluation/gate.sh`): the structural checks, failing on any failure not on its advisory list — which is currently empty on purpose, so the suite is expected to be fully green. It needs no credentials and no network.
 
 ## Development Conventions
 
@@ -103,8 +103,8 @@ Never edit the `agent-skills` copy directly — edit here and re-sync, or the tw
 
 ## Testing
 
-There is no `npm test` unit suite, but the harness ships an automated structural self-test plus benchmark/panel verification. Quality is verified through:
-1. **`./self-test/evaluation/autoresearch-evaluate.sh`** — deterministic structural checks on the factory itself. This is the gate: it needs no credentials and runs on a fresh clone (`bash` + `python3`). A change must not lower `checks_passed` or add an entry to the issues list.
+There is no unit-test suite; the harness verifies itself with a structural self-test plus benchmark/panel verification. Quality is verified through:
+1. **`npm test`** (→ `self-test/evaluation/gate.sh`) — **this is the gate**. It runs the deterministic structural checks in `self-test/evaluation/autoresearch-evaluate.sh`, then fails on any reported failure that is not on its advisory list. It needs no credentials and runs on a fresh clone (`bash` + `python3`, no `npm install`). Judge a change by the *issues list*, not by `checks_passed`: adding checks raises the total, so a count comparison hides a regression behind a rising number.
 2. `./self-test/evaluation/evaluate.sh <case-id>` — scores a factory-**produced** skill against a reference. It needs a factory output first, and the tracked cases carry `input_materials: null` (their sources are private), so on a public clone you supply your own case. With `JUDGE_MODEL`/`JUDGE_API_KEY` it scores via LLM-as-judge; otherwise structural checks only, and that score is not comparable to a judge-scored target.
 3. Panel verification with multi-agent consensus (Quality + Utility + Devil's Advocate) — the committed worked example is `self-test/benchmarks/premortem-rebuild.md`.
 

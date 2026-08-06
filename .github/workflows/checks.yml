@@ -1,8 +1,10 @@
 name: checks
 
-# Two deterministic jobs. No secrets, no API keys, no network beyond checkout — so this runs on forks
-# and on pull requests from forks, which is the point: the people most likely to break something here
-# are the people who just forked it.
+# Two deterministic jobs. No secrets, no API keys, no network beyond checkout.
+#
+# `self-test` is the one that matters to a fork, and it runs everywhere — including on pull requests
+# from forks, which is the point: the people most likely to break something here are the people who
+# just forked it. `parity` is publisher-specific and is skipped outside this repo (see its `if:`).
 on:
   push:
     branches: [main]
@@ -31,6 +33,10 @@ jobs:
   parity:
     name: factory parity with the published copy
     runs-on: ubuntu-latest
+    # Only meaningful in the repo that publishes to a-tokyo/agent-skills. A fork editing the factory —
+    # the main reason to fork — would otherwise get a permanent red X for diverging from someone else's
+    # registry, with no way to clear it. Point PARITY_TARGET at your own registry to re-enable it.
+    if: github.repository == 'a-tokyo/agent-skills-harness'
     steps:
       - uses: actions/checkout@v4
         with:

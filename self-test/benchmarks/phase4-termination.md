@@ -2,6 +2,10 @@
 
 Does the v0.2.0 wording actually change what an agent *does*, or does it only read better?
 
+**Scope of the claim:** this shows the new wording, read on its own, licenses stopping where the old
+wording did not. It does **not** show the override beats the competing instruction at runtime — see
+[Honest limits](#honest-limits).
+
 The structural self-test cannot answer that: it greps for strings, and a string can be present while the
 behaviour it describes never happens. This is a behavioural A/B against the control the change replaced.
 
@@ -49,6 +53,18 @@ is the defect, stated by an agent that had never seen the bug report.
 
 ## Honest limits
 
+The strongest one first, because it bounds what this result can be used to claim:
+
+- **Neither arm was shown the text the fix has to beat.** Each arm received the factory file *alone*,
+  told to consult no other skill. But the fix works by overriding a **different** vendored file —
+  `autoresearch/SKILL.md:332` "Continue if budget remains" and `:202` "Do not stop to ask the user" —
+  and in a real run both texts are in the same context, with autoresearch driving the loop. There is no
+  mechanical precedence: `target_score` is never handed to autoresearch, so which instruction wins rests
+  on which prose the agent weights.
+
+  **So what this measured is that the new wording, read on its own, licenses stopping — not that it wins
+  the conflict at runtime.** Those are different claims, and only the weaker one is evidenced here.
+  Testing the stronger one needs both files in context, which is a real build.
 - **n=1 per cell, one model (Sonnet).** Below the n=5 the benchmark standard asks for, and with no Haiku
   or Opus cells. Enough to show the wording changes the decision; not enough to quantify how reliably.
 - **Scenario-based, not a real build.** Each arm was handed a described state rather than reaching it by
@@ -57,6 +73,12 @@ is the defect, stated by an agent that had never seen the bug report.
   deterministic version would need a real build and a credential.
 - Scenario 1 is close to the SHIP-WITH-CAVEATS boundary by construction. A score below
   `target_score - 0.10` would exercise the ITERATE path, which neither arm was tested on.
+
+## What would close the gap
+
+A third arm with **both** files in context, which is the production condition — bare autoresearch text,
+autoresearch + factory v0.1.0, autoresearch + factory v0.2.0. That is the test that would show whether
+the override actually wins, and it is the honest next step for this benchmark.
 
 ## Reproducing
 

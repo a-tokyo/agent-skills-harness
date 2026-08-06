@@ -43,7 +43,7 @@ dossier, benchmarking, improvement loop, and verification a one-shot generator c
 ```bash
 git clone <your-fork-url> agent-skills-harness
 cd agent-skills-harness
-npm install                                # optional — no runtime deps; enables `npm test`
+npm install                                # optional — there are no dependencies; `npm test` works without it
 git submodule update --init --recursive    # optional — fetches reference implementations under docs/resources/
 ```
 
@@ -77,7 +77,10 @@ You fill `input/`; the factory generates `work/` and `output/`. In practice:
    See [`docs/reference/tuning.md`](docs/reference/tuning.md).
 4. **Ship from `output/<skill-name>/`** — copy it into a skills repo's `skills/`, or install with `npx skills`.
 
-Upgrading an existing skill? Hand it to the factory as a study material; it baselines against the rubric and improves it rather than starting from scratch.
+Upgrading an existing skill, or migrating a whole collection you already have? That is a first-class
+path, not a special case — the factory treats each as both study material and baseline, so you get a
+measured before-and-after instead of a rewrite. See
+[Bringing an existing skill or collection in](docs/usage-guide.md#bringing-an-existing-skill-or-collection-in).
 
 - **The full contract** (exactly what goes in and comes out): [`docs/reference/io-contract.md`](docs/reference/io-contract.md)
 - **The factory's own regression test**: [`self-test/`](self-test/) benchmarks factory output against a
@@ -136,7 +139,9 @@ Two kinds of evidence, and the honest reading of both.
 
 **Skills shipped from this project.** Published at
 [a-tokyo/agent-skills](https://github.com/a-tokyo/agent-skills), each with its benchmark method,
-per-model results and honest negatives:
+per-model results and honest negatives. The "built with the factory" column is the maintainer's record
+of how each skill was produced — build workspaces are gitignored, so it is not independently verifiable
+from either repo:
 
 | Skill | Built with the factory | Benchmark |
 |-------|------------------------|-----------|

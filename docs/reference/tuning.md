@@ -60,21 +60,26 @@ So a build sitting at 0.78 against a 0.85 target is a **SHIP WITH CAVEATS**, not
 **Symptom:** the run reports that it is not hitting the exit criteria and asks to iterate again, over
 and over, without the score moving.
 
-**Cause:** `target_score` is set higher than the task can reach, and plateau detection is *advisory* —
-the loop reports a plateau and then keeps going while budget remains. It stops on `target_score`
-reached, `max_iterations` exhausted, or you interrupting it. A target the task cannot reach therefore
-spends the whole budget before yielding.
+**Cause:** `target_score` is set higher than the task can reach. The underlying autoresearch loop treats
+a plateau as *advisory* — it reports one and keeps going while budget remains — so on its own it stops
+only when the target is reached, the budget is exhausted, or you interrupt.
 
-Three ways out, best first:
+**Since factory v0.2.0 the factory overrides that**: a plateau sitting inside judge variance is
+**terminal**, and Phase 4 hands the best-so-far result to Phase 5 rather than spending the rest of the
+budget. So a healthy run should now end by itself and produce a verdict, not ask you to iterate forever.
 
-1. **Set `target_score` to the achievable band.** Run a couple of experiments, see where the score
-   settles, and set the target just above it. Scores of 0.80-0.90 are the normal ceiling; 1.0 is not a
-   realistic goal for a judged rubric.
+If a run is still asking to iterate, work through these in order:
+
+1. **Check you are on v0.2.0 or later.** `grep '^version:' <factory>/SKILL.md`. On v0.1.0 the loop had
+   no terminal-plateau rule and this behaviour is expected — upgrade, or use the manual freeze below.
 2. **Check whether you are chasing noise.** Typical judge variance is 0.2-0.3 points on a 1-10 scale
    ([rubric-format.md](rubric-format.md#judge-variance)). An improvement smaller than that is not
    measurable, so the loop cannot converge on it. If the plateau sits inside judge variance, the skill
    is at the measurement ceiling and further iteration buys nothing.
-3. **Lower `max_iterations`** so the loop yields to Phase 5 sooner, and let the verdict table above
+3. **Set `target_score` to the achievable band.** Run a couple of experiments, see where the score
+   settles, and set the target just above it. Scores of 0.80-0.90 are the normal ceiling; 1.0 is not a
+   realistic goal for a judged rubric.
+4. **Lower `max_iterations`** so the loop yields to Phase 5 sooner, and let the verdict table above
    decide honestly.
 
 If the score is close and you simply want to move on, lock the baseline.
@@ -82,14 +87,24 @@ If the score is close and you simply want to move on, lock the baseline.
 ## Locking a baseline
 
 Freezing a known-good score lets you proceed with the rest of a migration and revisit the score later.
-There is no dedicated setting yet, so do it explicitly:
 
-1. Note the best `overall_score` and its commit from `work/experiments/results.tsv`.
-2. Record both in `work/handoffs/state.yaml` as `best_score` / `best_commit`.
-3. Set `target_score` at or just below that score, so the criteria are satisfied and Phase 4 exits.
-4. Add the real target to `work/experiments/autoresearch.ideas.md` so the gap is not forgotten.
+Set one field in `work/handoffs/state.yaml`:
 
-Then continue to Phase 5 and ship with caveats. A first-class `baseline_lock` setting is planned.
+```yaml
+best_score: 0.79          # the score you are freezing
+best_commit: <hash>       # from work/experiments/results.tsv
+baseline_lock: true       # Phase 4 treats best_score as satisfying the exit criteria
+```
+
+Phase 4 then stops, carries that result into Phase 5, and logs the real target in
+`work/experiments/autoresearch.ideas.md` so the gap is not forgotten. **Leave `target_score` alone** —
+that is the point of the flag. Overwriting the target to force an exit destroys the record of what you
+were actually aiming for. Full schema:
+[`pipeline-phases.md`](../../.agents/skills/create-skill-autoresearch/references/pipeline-phases.md).
+
+*On v0.1.0*, where `baseline_lock` is not honoured, the manual equivalent is to record `best_score` and
+`best_commit`, set `target_score` at or just below that score so the criteria are satisfied, and note the
+real target in the ideas backlog.
 
 ## Two questions, two instruments
 

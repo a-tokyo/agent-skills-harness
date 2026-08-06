@@ -29,7 +29,7 @@ The factory is both the subject and the tool. To avoid circular validation:
 
 ## Success Criteria
 
-- Overall score >= 0.80 on the committed public case (`tokyo-production-grade`); additional private cases were used during the factory's original development
+- Overall score >= 0.80 against a gold-standard reference. `tokyo-production-grade` is a *scoring target* only — its `input_materials` are absent from this repo, so an end-to-end run needs a case you supply (see `self-test/README.md`). Additional private cases were used during the factory's original development
 - No dimension scores below 5/10 on any case study
 - The factory follows its own pipeline without manual intervention
 - Research dossier covers key patterns identified in case study notes

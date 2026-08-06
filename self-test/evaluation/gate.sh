@@ -25,6 +25,12 @@ cd "$REPO_ROOT"
 # decision: it retires a check. Prefer fixing the code.
 ADVISORY_RE=''
 
+# Floor for the number of checks. Some checks are conditional — the TOC check only applies to a
+# reference over ~100 lines — so gutting a file can delete its own check and leave the suite green with
+# a smaller total. Comparing issues alone cannot catch that; a floor can. Raise this deliberately when
+# you add checks; lowering it is retiring coverage and needs the same scrutiny as ADVISORY_RE.
+MIN_CHECKS=85
+
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -61,7 +67,16 @@ unexpected_count="$(wc -l <"$WORK/unexpected.txt" | tr -d ' ')"
 
 echo ""
 echo "--- Gate ---"
-echo "checks: $passed/$total passed; advisory failures: $advisory_count; unexpected: $unexpected_count"
+echo "checks: $passed/$total passed; advisory failures: $advisory_count; unexpected: $unexpected_count (floor $MIN_CHECKS)"
+
+if [ "$total" -lt "$MIN_CHECKS" ]; then
+  echo ""
+  echo "GATE FAIL: only $total checks ran, below the floor of $MIN_CHECKS." >&2
+  echo "A check disappeared rather than failed — conditional checks skip themselves when the thing they" >&2
+  echo "guard shrinks, so this can go green while coverage silently drops. Find what stopped being" >&2
+  echo "checked. Only lower MIN_CHECKS if you are deliberately retiring coverage." >&2
+  exit 1
+fi
 
 if [ "$unexpected_count" -gt 0 ]; then
   echo ""
