@@ -4,7 +4,7 @@
     "description": "A factory for building production-grade agent skills — benchmarked against gold standards, autonomously improved via autoresearch, and verified by multi-agent consensus.",
     "license": "MIT",
     "scripts": {
-        "skills:update": "npx skills update",
-        "test": "echo \"No unit tests. Run the self-test: see self-test/README.md\" && exit 0"
+        "skills:refresh-all": "npx skills update",
+        "test": "bash self-test/evaluation/gate.sh"
     }
 }

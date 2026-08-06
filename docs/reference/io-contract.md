@@ -20,7 +20,8 @@ the manifest for you to confirm.
 |-------------|-----------|-----------|
 | **Gold standards** | 3+ exemplars of "what good looks like": input/output pairs, reference artifacts, or previously solved tasks | **Yes** (min 3) |
 | **Study materials** | Docs, code, transcripts, specs, style guides, an existing skill to upgrade | Recommended |
-| **A judge** (env vars) | `JUDGE_MODEL`, `JUDGE_API_KEY`, `JUDGE_API_BASE` for an OpenAI-compatible endpoint | Optional — falls back to deterministic-only scoring |
+| **A judge** (env vars) | `JUDGE_MODEL`, `JUDGE_API_KEY`, `JUDGE_API_BASE` for an OpenAI-compatible endpoint — for *scoring text* | Optional — falls back to deterministic-only scoring |
+| **An agent credential** (env vars) | `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` — for benchmark arms that *run an agent* | Optional — only for uplift benchmarks |
 
 Gold standards are the benchmark; they are never modified during the build. Fewer than three is a
 risk the factory will warn you about.
@@ -29,14 +30,17 @@ risk the factory will warn you about.
 
 ## CONTRACT — what the factory maintains in `work/`
 
-These are generated and owned by the factory, but they define the measurable bar, so they are part
-of the contract. Inspect or correct them at the phase boundaries.
+The factory generates these, but they define the measurable bar, so they are part of the contract.
+The first four are **yours to correct at the phase boundaries** — that is the intended workflow, not a
+violation of the zone model. See [tuning.md](tuning.md) for what each knob does.
 
-| Artifact | Purpose | Spec |
-|----------|---------|------|
-| `work/manifest.yaml` | Factory-derived index of your gold standards, tagged train/validation/test | confirm during Phase 1 |
-| `work/evaluation/rubric.yaml` | Scored dimensions, weights, criteria, target score | [rubric-format.md](rubric-format.md) |
-| `work/evaluation/evaluate.sh` | Runs the skill on a case and emits measurements | [metric-protocol.md](metric-protocol.md) |
+| Artifact | Purpose | Yours to edit? | Spec |
+|----------|---------|----------------|------|
+| `work/manifest.yaml` | Factory-derived index of your gold standards, tagged train/validation/test | **Yes** — confirm or correct during Phase 1 | |
+| `work/evaluation/rubric.yaml` | Scored dimensions, weights, criteria, and the **exit criteria** (`target_score`, `max_iterations`, `plateau_window`) | **Yes** — any phase boundary | [rubric-format.md](rubric-format.md) · [tuning.md](tuning.md) |
+| `work/evaluation/judges.yaml` | Judge models and weights. **Never a credential** | **Yes** — before Phase 4 | [tuning.md](tuning.md#models-and-credentials) |
+| `work/evaluation/data-split.yaml` | Which gold standards are held out | **Yes** — before Phase 4 | |
+| `work/evaluation/evaluate.sh` | Runs the skill on a case and emits measurements | No — derived; change the rubric and let it regenerate | [metric-protocol.md](metric-protocol.md) |
 
 The evaluation contract in one line: `./work/evaluation/evaluate.sh <case-id>` prints
 `METRIC <name>=<value>` lines to stdout, including a normalized `METRIC overall_score=<0.0–1.0>`

@@ -33,6 +33,8 @@ builds/<skill-name>/
     experiments/
       DESIGN.md                   # Structural decisions locked before drafting
       craft-decisions.md          # Append-only iteration ledger (DNN format)
+      improvement-notes.md        # Lesson -> improvement log across rounds (see below)
+      OPEN-QUESTIONS.md           # Unresolved questions awaiting a human decision (see below)
       autoresearch.md             # Session contract (goal, config, budget)
       autoresearch.jsonl          # Machine log with ASI fields
       results.tsv                 # Human-readable experiment journal
@@ -46,10 +48,53 @@ builds/<skill-name>/
   output/                         # FACTORY: the finished skill, publish-ready
     <skill-name>/                 # the skill in its own named dir
       SKILL.md                    # The skill itself
+      README.md                   # Optional, ships on install: what it does, method, results
       references/                 # Reference files (if needed)
       scripts/                    # Executable utilities (if needed)
       assets/                     # Static assets (if needed)
+
+  output-<variant>/               # Optional: a competing draft kept for comparison (see below)
+  BENCHMARK.md                    # Final panel scores + verdict (Phase 5)
 ```
+
+This is a shape, not a schema. Real builds diverge — one may keep its ledger at `work/` root, or add
+`work/runs/` and `work/fixture/` for a benchmark harness, or never need `handoffs/` because it finished
+in one session. Follow the intent (human input separate from generated work separate from the
+deliverable) rather than creating empty directories to match the diagram.
+
+**Benchmarks do not live here.** A skill's uplift benchmark belongs at `benchmarks/<skill-name>/` in the
+repo you publish to, outside `skills/`, so it never ships on install. The build workspace holds the
+*rubric* evaluation that steers the loop; those are different instruments — see
+[tuning.md](tuning.md#two-questions-two-instruments).
+
+### Keeping competing drafts: `output-<variant>/`
+
+When a redesign might be better but you are not sure, keep both and let the measurement decide. Both
+newest builds in this project did exactly that — one kept three parallel drafts (225, 138 and 169 lines)
+and shipped the smallest after it scored equal or better; another kept a pre-premortem snapshot beside
+the final. Name them `output-v2/`, `output-pre-premortem/`, whatever is descriptive. Delete the losers
+once the decision is recorded in `craft-decisions.md`, so the winner is unambiguous.
+
+### The two ledgers
+
+- **`craft-decisions.md`** — every design decision and iteration, append-only. What was tried, what the
+  metric said, what was kept. This is the audit trail for *this* build.
+- **`improvement-notes.md`** — the lesson→improvement log that outlives the build: what went wrong, what
+  it implies for the *skill's next version* or for the factory itself. This is what turns one build's
+  scar tissue into a durable improvement instead of a rediscovery.
+
+### `OPEN-QUESTIONS.md` and the drain
+
+Questions the build cannot settle alone accumulate here rather than blocking. Periodically a human
+**drains the queue**: for each question, decide whether the answer should become a durable principle or
+rule in the skill. If it should, push it into `work/experiments/autoresearch.ideas.md`, and the next
+Phase 4 run picks it up as a hypothesis and measures it.
+
+That loop — open question → human decision → ideas backlog → measured iteration → rebaseline → publish —
+is how a skill absorbs new knowledge without anyone hand-editing it. Treat those four steps as the
+factory's run modes: **train** (a fresh build or improvement round), **drain** (codify open questions),
+**rebaseline** (re-measure after the skill or rubric moved), and **publish**
+(`.agents/skills/create-skill-autoresearch/references/publishing.md`).
 
 ## The three zones
 
@@ -65,11 +110,22 @@ writes its derived index to `work/manifest.yaml` for you to confirm or correct.
 
 ### work/ — what the factory generates
 
-The lab notebook. None of it ships. Subdirectories:
+The lab notebook. None of it ships.
+
+**Four files here are yours to correct at phase boundaries**, even though the factory writes them
+first: `manifest.yaml`, `evaluation/rubric.yaml` (which holds the exit criteria),
+`evaluation/judges.yaml` and `evaluation/data-split.yaml`. Everything else is derived from those and
+gets rewritten, so edit the inputs rather than the outputs. See [tuning.md](tuning.md).
+
+**No credentials in any of these files.** Anything under `work/` may be committed when you run the
+factory inside your own project repo (see [Git Tracking](#git-tracking)), so a key written into
+`judges.yaml` becomes a key in your git history. Credentials belong in the environment.
+
+Subdirectories:
 
 - `manifest.yaml` — the factory's index of the gold standards found in `input/`, tagged train/validation/test.
 - `research/` — Phase 2 notes from parallel subagent exploration. `00-synthesis.md` is the cross-cutting synthesis (read first); numbered notes correspond to study-material clusters.
-- `evaluation/` — the scoring infrastructure: `rubric.yaml` (dimensions, weights, criteria), `evaluate.sh` (the script autoresearch calls), the optional `evaluate-checks.sh` correctness gate, `judges.yaml` (multi-judge config), and `data-split.yaml` (which gold standards are training vs held out).
+- `evaluation/` — the scoring infrastructure: `rubric.yaml` (dimensions, weights, criteria, and the exit criteria `target_score`/`max_iterations`/`plateau_window`), `evaluate.sh` (the script autoresearch calls), the optional `evaluate-checks.sh` correctness gate, `judges.yaml` (judge models and weights — names only, never a credential), and `data-split.yaml` (which gold standards are training vs held out).
 - `experiments/` — all experimentation artifacts: `DESIGN.md` (structural decisions locked before the first draft), `craft-decisions.md` (per-iteration ledger), the autoresearch session files, and `run.log`.
 - `handoffs/` — cross-session continuity (`state.yaml` for automatic resume, `HANDOFF-*.md` for rich human-readable context).
 
@@ -124,7 +180,7 @@ preserve the build.
 | `work/research/*.md` | Yes | Reproducible evidence |
 | `work/evaluation/rubric.yaml` | Yes | Scoring definition |
 | `work/evaluation/evaluate.sh` | Yes | Evaluation logic |
-| `work/evaluation/judges.yaml` | Yes (if present) | Multi-judge config |
+| `work/evaluation/judges.yaml` | Yes (if present) | Multi-judge config — **model names and weights only; a credential here would be committed** |
 | `work/experiments/DESIGN.md` | Yes | Design contract |
 | `work/experiments/craft-decisions.md` | Yes | Iteration history |
 | `work/experiments/autoresearch.md` | No | Session-specific |

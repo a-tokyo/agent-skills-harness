@@ -17,6 +17,8 @@ The core output is the `create-skill-autoresearch` factory skill, which orchestr
   handoff/                      # Context preservation across sessions (vendored)
   documentation-writer/         # Diataxis documentation generation (vendored)
   llm-council/                  # Multi-agent planning with consensus (vendored)
+  writing-great-skills/         # Skill-writing craft (vendored)
+  tribunal/                     # Phase 5 verification when delegated (vendored)
   design-taste-frontend/        # Anti-slop frontend/UI skill (vendored)
 
 builds/                         # Skills the harness PRODUCES (gitignored; one folder per build)
@@ -46,6 +48,8 @@ docs/
 | `handoff` | Compact conversation into handoff document for another agent |
 | `documentation-writer` | Diataxis-guided documentation generation |
 | `llm-council` | Multi-agent planning with anonymized judging |
+| `writing-great-skills` | Skill-writing craft: leading words, information hierarchy, description quality |
+| `tribunal` | Doer → verifier-panel → consensus verification; the factory delegates Phase 5 to it when present |
 | `design-taste-frontend` | Anti-slop frontend/UI design for landing pages and redesigns |
 
 ## Setup
@@ -57,7 +61,11 @@ npm install
 git submodule update --init --recursive   # docs/resources/ reference implementations
 ```
 
-No build step required. Skills are markdown-based and used directly by any AI coding agent that supports the SKILL.md format. The vendored skills are committed, so a fresh clone works offline; run `npm run skills:update` to refresh them from `skills-lock.json`.
+No build step required. Skills are markdown-based and used directly by any AI coding agent that supports the SKILL.md format. The vendored skills are committed, so a fresh clone works offline.
+
+To refresh a vendored skill, scope it: `npx skills update <skill-name>`. `npm run skills:refresh-all` does every one of them from each upstream's current HEAD and rewrites the lock entries — review that diff before committing, since an upstream edit changes how a companion behaves. `skills-lock.json` records provenance and a content hash; it is not a pin the CLI restores you to.
+
+`npm test` runs the regression gate (`self-test/evaluation/gate.sh`): the structural checks, failing on any failure not on its advisory list — which is currently empty on purpose, so the suite is expected to be fully green. It needs no credentials and no network.
 
 ## Development Conventions
 
@@ -95,14 +103,15 @@ Never edit the `agent-skills` copy directly — edit here and re-sync, or the tw
 
 ## Testing
 
-There is no `npm test` unit suite, but the harness ships an automated structural self-test plus benchmark/panel verification. Quality is verified through:
-1. The `self-test/` benchmark — runs the factory against the tracked `tokyo-production-grade` case and scores the output against the committed reference skill (`./self-test/evaluation/evaluate.sh <case-id>`)
-2. LLM-as-judge evaluation against gold standards (set `JUDGE_MODEL`/`JUDGE_API_KEY`; deterministic structural checks otherwise)
-3. Panel verification with multi-agent consensus (Quality + Utility + Devil's Advocate)
+There is no unit-test suite; the harness verifies itself with a structural self-test plus benchmark/panel verification. Quality is verified through:
+1. **`npm test`** (→ `self-test/evaluation/gate.sh`) — **this is the gate**. It runs the deterministic structural checks in `self-test/evaluation/autoresearch-evaluate.sh`, then fails on any reported failure that is not on its advisory list. It needs no credentials and runs on a fresh clone (`bash` + `python3`, no `npm install`). Judge a change by the *issues list*, not by `checks_passed`: adding checks raises the total, so a count comparison hides a regression behind a rising number.
+2. `./self-test/evaluation/evaluate.sh <case-id>` — scores a factory-**produced** skill against a reference. It needs a factory output first, and the tracked cases carry `input_materials: null` (their sources are private), so on a public clone you supply your own case. With `JUDGE_MODEL`/`JUDGE_API_KEY` it scores via LLM-as-judge; otherwise structural checks only, and that score is not comparable to a judge-scored target.
+3. Panel verification with multi-agent consensus (Quality + Utility + Devil's Advocate) — the committed worked example is `self-test/benchmarks/premortem-rebuild.md`.
 
 ## Git Workflow
 
 - Feature branches for skill development
 - Autoresearch sessions run on `autoresearch/<tag>` branches
 - `builds/` (a run's working area) is gitignored; session artifacts (`results.tsv`, `autoresearch.jsonl`, `run.log`) are never tracked
-- When running the factory inside a real project repo, gold standards, the rubric, and evaluation scripts should be committed (see `docs/reference/workspace-layout.md`)
+- When running the factory inside a real project repo, gold standards, the rubric, and evaluation scripts should be committed (see `docs/reference/workspace-layout.md`) — which is exactly why **no credential may ever be written into `work/`**, `judges.yaml` included. Credentials live in the environment; see `docs/reference/tuning.md`.
+- Scratch material (notes, transcripts, anything pulled in while working) goes in `tmp/`, which is gitignored. This repo pushes to public remotes — check `git status --short` before committing.

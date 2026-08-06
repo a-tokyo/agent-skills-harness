@@ -72,7 +72,16 @@ The factory invokes the `autoresearch` skill with your evaluation pipeline:
 - Improvements are kept, regressions are reverted
 - Every experiment logs a hypothesis, result, and insight
 
-The loop runs autonomously until the budget is exhausted or a plateau is detected.
+The loop runs autonomously. Since factory v0.2.0 it ends when it reaches `target_score`, when a plateau
+sits **inside judge variance** (further gains are not measurable, so Phase 4 stops and hands the
+best-so-far result to Phase 5), when `max_iterations` is exhausted, or when you stop it. On v0.1.0 a
+plateau was only an advisory alert and did not end the loop — which is why an unreachable target could
+run the budget out.
+
+> **If the run keeps asking to iterate and the score is not moving**, the target is probably set higher
+> than this task can reach. That is a configuration question, not a failure — see
+> [reference/tuning.md](reference/tuning.md#when-the-loop-will-not-stop) for which field to change and
+> how to lock a baseline and move on.
 
 ### What You See During Autoresearch
 
@@ -83,7 +92,8 @@ The factory tracks progress in:
 
 ### When to Intervene
 
-- **Plateau detected**: The factory alerts you when N consecutive experiments fail to improve. Consider providing new directions or adjusting the rubric.
+- **Plateau detected**: The factory alerts you when N consecutive experiments fail to improve. Consider providing new directions or adjusting the rubric. First check whether the remaining gap is smaller than judge variance (0.2-0.3 points on a 1-10 scale) — if so the skill is at the measurement ceiling and more iterations cannot help.
+- **The loop won't converge**: lower `target_score` in `work/evaluation/rubric.yaml` to the achievable band, or lock the baseline and proceed — [reference/tuning.md](reference/tuning.md#locking-a-baseline). A result at `target_score - 0.10` is a legitimate SHIP WITH CAVEATS, not a failure.
 - **Context limit**: The factory writes a handoff document and creates a `state.yaml` for seamless resume in a new session.
 
 ## Step 6: Verification (Phase 5)
@@ -116,11 +126,30 @@ builds/<skill-name>/output/<skill-name>/
   references/           # If needed
 ```
 
-Copy this directory to your target project's `.agents/skills/` (or `~/.cursor/skills/`), or into a skills repo's `skills/` to publish:
+To **use** it locally, copy that directory into your project's `.agents/skills/` (or `~/.cursor/skills/`).
+
+To **publish** it, a copy is not enough — a skill nobody's registry lists is invisible, and a version
+that disagrees with its registry entry installs the wrong thing:
 
 ```bash
 cp -r builds/<skill-name>/output/<skill-name> <your-skills-repo>/skills/
 ```
+
+then work through the checklist in
+[`.agents/skills/create-skill-autoresearch/references/publishing.md`](../.agents/skills/create-skill-autoresearch/references/publishing.md):
+catalogue row, plugin-marketplace entry with a `version` matching the frontmatter, and the uplift
+benchmark at `benchmarks/<skill-name>/` — outside `skills/`, so it does not ship on install.
+
+Before calling it shipped, make sure it earned its place: [benchmarking.md](benchmarking.md).
+
+### Bringing an existing skill or collection in
+
+Migrating skills you already have is a first-class path, not a special case. Point the factory at them
+and it treats each as **both a study material and a baseline**: it researches what they already encode,
+measures them against the rubric, and improves from there instead of starting from a blank page. Put the
+existing skill files in `input/` alongside your gold standards, and answer the Phase 1 existing-skill
+question — that sets the run to **upgrade** mode. You get a measured before-and-after rather than a
+rewrite you have to take on faith.
 
 ## Workspace Layout
 
