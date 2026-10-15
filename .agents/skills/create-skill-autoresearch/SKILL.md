@@ -354,7 +354,7 @@ Refresh `work/evaluation/plugin/skills/<skill-name>/` from `output/`, then run t
 without the skill (grant only the gated tools the skill needs; pin the model the skill targets):
 
 ```bash
-cd work/evaluation/plugin && claude plugin eval . --ablation with-without --runs 3 \
+cd work/evaluation/plugin && claude plugin eval . --ablation with-without --runs 3 -j 4 \
   --model <model> --allow-tools Bash Write --scaffold --trust-plugin --no-publish --json ../plugin-eval.json
 ```
 
