@@ -217,7 +217,7 @@ Build the suite the 5.0 gate runs, in a wrapper plugin under `work/` so nothing 
 `skills/<skill-name>/` (refresh it before every run), and `evals/`. From that directory, scaffold each
 case with `claude plugin eval init --bare <case>` (a human at a terminal may use the `init` interview):
 - one case per **test-split** gold standard (4.2): the prompt as a user would phrase it, input files
-  copied in by a `case.yaml` `scaffold_script`, and graders on the decisive facts — `regex` on
+  copied in by a `scaffold_script` ([worked case](references/pipeline-phases.md)), graders on decisive facts — `regex` on
   `{ source: file, path: <output> }` where mechanical, `llm` only for judgement;
 - two or more **should-trigger** prompts graded `tool_used` on `Skill` (model-invoked skills only);
 - one **should-not-trigger** near miss, graded by `graders/not-fired.md`:

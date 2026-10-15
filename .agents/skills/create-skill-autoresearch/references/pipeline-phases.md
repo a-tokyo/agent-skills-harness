@@ -6,7 +6,7 @@ Detailed instructions for each phase of the create-skill-autoresearch factory.
 
 - Phase 1: Interview -- Detailed Question Flow
 - Phase 2: Research -- Subagent Orchestration
-- Phase 3: Draft -- Design-First Approach (DESIGN.md template, `evaluate.sh` contract, judge templates)
+- Phase 3: Draft -- Design-First Approach (DESIGN.md template, `evaluate.sh` contract, judge templates, plugin-eval worked case)
 - Phase 4: Autoresearch -- Integration Details (invocation, loop conventions, data split, overfitting detection)
 - Phase 5: Verify -- Panel Prompt Templates (Verifier-A/B, Devil's Advocate, synthesis)
 
@@ -295,6 +295,71 @@ For each dimension:
   }
 }
 ```
+
+### Plugin-Eval Worked Case (SKILL.md 3.6)
+
+One test-split case for a skill that reads input files and writes `po.json`. Each run starts in an
+empty workspace; the scaffold copies the case's fixtures in. Inside the wrapper plugin:
+
+```
+work/evaluation/plugin/
+  .claude-plugin/plugin.json      # {"name": "<skill-name>-eval", "version": "0.0.0"}
+  skills/<skill-name>/            # copy of output/<skill-name>/, refreshed before every run
+  evals/
+    holdout-03/
+      prompt.md
+      case.yaml
+      fixture.sh                  # chmod +x
+      fixtures/request.md  fixtures/master-data/...
+      graders/approval.md  graders/skill-fired.md
+```
+
+```bash
+# fixture.sh — runs in the empty workspace; locate the case dir from the script's own path
+#!/usr/bin/env bash
+set -euo pipefail
+cp -R "$(dirname "$0")/fixtures/." .
+```
+
+```yaml
+# case.yaml
+schema_version: "1.1"
+name: holdout-03
+context:
+  scaffold_script: fixture.sh
+```
+
+```markdown
+---
+max_turns: 20
+timeout_seconds: 400
+allowed_tools: [Read, Glob, Grep, Bash, Write, Skill]
+---
+
+Turn request.md into a purchase order using the master data in master-data/, and write it to po.json.
+```
+
+```yaml
+# graders/approval.md — grade the file the skill wrote, not the chat
+---
+type: regex
+target: { source: file, path: po.json }
+pattern: "\"approval\":\\s*\"director\""
+---
+```
+
+```yaml
+# graders/skill-fired.md — a with-arm indicator; excluded from the with/without score
+---
+type: tool_used
+tool: Skill
+---
+```
+
+Run from `work/evaluation/plugin/` with `--scaffold` (or the fixtures never arrive), `--allow-tools`
+for every gated tool `prompt.md` lists, `--trust-plugin` in unattended runs, and a pinned `--model`.
+Smoke-test one case with `--runs 1` before the full gate: a with-arm score of 0 while `skill-fired`
+passes means the skill fired but could not act — check the tool grants and the fixtures first.
 
 ---
 
