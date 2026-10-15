@@ -72,9 +72,10 @@ examples, or find additional reference materials.
 
 Summarize all parameters in a table. Ask the user to confirm.
 
-Once confirmed, create the build workspace `builds/<skill-name>/` (layout under Output Structure):
-`input/` for the user's gold standards and study materials in any structure, `work/` for everything the
-factory generates, `output/<skill-name>/` for the publish-ready skill.
+Once confirmed, create the build workspace `builds/<skill-name>/` (layout under Output Structure): `input/`
+for gold standards and study materials, `work/` for everything generated, `output/<skill-name>/` to ship.
+If the working directory is already dedicated to this build (it holds the brief and inputs), it *is* the
+workspace: create `work/` and `output/<skill-name>/` in place and keep every path below relative to it.
 
 Do **not** ask the user to hand-author a manifest. Scan whatever is in `input/`, classify each item as a gold standard (exemplar input/output pair or reference artifact) vs a study material, and write your derived index to `work/manifest.yaml` with train/validation/test tags. Present the derived manifest for the user to confirm or correct. See [references/pipeline-phases.md](references/pipeline-phases.md) for intake formats and the manifest schema.
 
@@ -471,5 +472,4 @@ Only `output/<skill-name>/` ships; its uplift benchmark belongs **outside** the 
 
 ## Handoff Rules
 
-Write a handoff (4.4) on any phase transition, when the context window or the session's experiment
-budget runs low, or when the user asks. Resume per 4.5.
+Hand off (4.4) on any phase transition, when context or the session's budget runs low, or on request; resume per 4.5.
