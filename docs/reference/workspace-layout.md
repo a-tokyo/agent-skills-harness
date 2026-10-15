@@ -28,7 +28,10 @@ builds/<skill-name>/
       evaluate.sh                 # METRIC-emitting evaluation script
       evaluate-checks.sh          # Optional correctness gate
       judges.yaml                 # Optional multi-judge configuration
-      data-split.yaml             # Train/validation/test assignment
+      data-split.yaml             # Train/validation/test assignment (+ plugin_eval case list)
+      plugin/                     # Phase 3.6 wrapper plugin: .claude-plugin/plugin.json,
+                                  #   skills/<name>/ (copy of output), evals/<case>/
+      plugin-eval.json            # Phase 5.0 with/without result (WITH, W/OUT, delta per case)
 
     experiments/
       DESIGN.md                   # Structural decisions locked before drafting
@@ -161,8 +164,10 @@ session ends or on handoff.
 | `run.log` | `work/experiments/run.log` |
 | `autoresearch.ideas.md` | `work/experiments/autoresearch.ideas.md` |
 
-The factory creates `autoresearch.checks.sh` at the workspace root as a wrapper that calls
-`work/evaluation/evaluate-checks.sh`.
+The upstream autoresearch skill keeps only `results.tsv` and `run.log`; the factory writes
+`autoresearch.jsonl` and `autoresearch.ideas.md` itself and runs `work/evaluation/evaluate-checks.sh`
+(when present) before every measurement — see the "Loop Conventions the Factory Owns" section of the
+factory's `references/pipeline-phases.md`.
 
 `BENCHMARK.md` (final pass/fail scores for the shipped skill) is generated at the end of Phase 5
 (Verify) and placed at `builds/<skill-name>/BENCHMARK.md`. It is a summary, not a process artifact.

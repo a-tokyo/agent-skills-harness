@@ -160,20 +160,22 @@ flowchart LR
   CSA --> PM["premortem<br/>(invoked Phase 5)"]
   CSA --> HO["handoff<br/>(invoked on context fatigue)"]
   CSA -.->|"if installed"| TR["tribunal<br/>(Phase 5 verification)"]
-  CSA -.->|"craft layer"| WGS["writing-great-skills"]
+  CSA --> SC["skill-creator<br/>(Phase 3 authoring, 4.6 description)"]
+  CSA -.->|"craft passes"| WFA["writing-for-agents"]
+  CSA --> PE["claude plugin eval<br/>(3.6 suite, 5.0 gate)"]
   CSA -.->|"follows conventions"| PG["production-grade"]
-  CSA -.->|"follows conventions"| SC["skill-creator"]
 ```
 
 | Skill | Integration Type | When |
 |-------|-----------------|------|
-| autoresearch | Called as dependency | Phase 4: provides the experimentation loop |
+| skill-creator | Called as dependency, with fallback | Phase 3.3 authoring and Phase 4.6 description pass; without it, the 3.3 checklist and `references/standalone-fallback.md` |
+| autoresearch | Called as dependency | Phase 4: the upstream experimentation loop, run with the factory's METRIC, checks and jsonl conventions (`references/pipeline-phases.md`) |
+| `claude plugin eval` | CLI, with fallback | Phase 3.6 builds a wrapper-plugin suite in `work/evaluation/plugin/`; Phase 5.0 runs it with and without the skill. Without Claude Code, `evaluate.sh` and the manual uplift benchmark |
 | premortem | Invoked directly | Phase 5: before panel evaluation |
 | handoff | Invoked directly | When context fatigues or session ends |
 | tribunal | Delegated to when installed | Phase 5: replaces the inline panel; the inline one remains the fallback so a standalone install works |
-| writing-great-skills | Distilled into a reference | Phase 3 and the Phase 4 craft passes, via `references/skill-craft-principles.md` |
+| writing-for-agents | Called as dependency, with fallback | Phase 3.1 design and the Phase 4 craft passes; failure modes probed in Phase 5 |
 | production-grade | Conventions followed | Throughout (plan-of-plans, quality gates) |
-| skill-creator | Conventions followed | Phase 3: SKILL.md structure and format. Anthropic's official single-pass creator — this factory extends it rather than replacing it |
 | llm-council | Design influence only | Phase 5 panel and consensus design |
 
 ## Design Decisions

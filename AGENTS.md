@@ -11,13 +11,14 @@ The core output is the `create-skill-autoresearch` factory skill, which orchestr
 ```
 .agents/skills/                 # Skills the harness USES (factory + vendored companions)
   create-skill-autoresearch/    # The factory skill (main deliverable; original)
-  autoresearch/                 # Autonomous experimentation loop (vendored)
+  autoresearch/                 # Autonomous experimentation loop (vendored, upstream as-is)
+  skill-creator/                # Anthropic's skill creator: authoring + description pass (vendored)
   production-grade/             # Engineering posture principles (vendored)
   premortem/                    # Risk analysis before execution (vendored)
   handoff/                      # Context preservation across sessions (vendored)
   documentation-writer/         # Diataxis documentation generation (vendored)
   llm-council/                  # Multi-agent planning with consensus (vendored)
-  writing-great-skills/         # Skill-writing craft (vendored)
+  writing-for-agents/           # Skill-writing craft (vendored)
   tribunal/                     # Phase 5 verification when delegated (vendored)
   design-taste-frontend/        # Anti-slop frontend/UI skill (vendored)
 
@@ -42,13 +43,14 @@ docs/
 | Skill | Purpose |
 |-------|---------|
 | `create-skill-autoresearch` | Factory for creating production-grade skills via autoresearch |
-| `autoresearch` | Autonomous iterative experimentation loop with METRIC protocol |
+| `autoresearch` | Autonomous iterative experimentation loop (upstream; the factory passes it the METRIC, checks and jsonl conventions) |
+| `skill-creator` | Anthropic's skill creator; the factory delegates Phase 3 authoring and the Phase 4.6 description pass to it |
 | `production-grade` | Principle-engineering posture for production-grade code |
 | `premortem` | Identify failure modes before they occur |
 | `handoff` | Compact conversation into handoff document for another agent |
 | `documentation-writer` | Diataxis-guided documentation generation |
 | `llm-council` | Multi-agent planning with anonymized judging |
-| `writing-great-skills` | Skill-writing craft: leading words, information hierarchy, description quality |
+| `writing-for-agents` | Skill-writing craft: leading words, information hierarchy, pruning; the factory's craft passes |
 | `tribunal` | Doer → verifier-panel → consensus verification; the factory delegates Phase 5 to it when present |
 | `design-taste-frontend` | Anti-slop frontend/UI design for landing pages and redesigns |
 
@@ -70,7 +72,7 @@ To refresh a vendored skill, scope it: `npx skills update <skill-name>`. `npm ru
 ## Development Conventions
 
 - Skills live in `.agents/skills/<skill-name>/SKILL.md`
-- Skills follow the official skill-authoring rules (Anthropic best-practices; YAML frontmatter, < 500 lines, progressive disclosure, references one level deep) — see `.agents/skills/create-skill-autoresearch/references/skill-authoring-best-practices.md`
+- Skills follow the official skill-authoring rules (Anthropic best-practices; YAML frontmatter, < 500 lines, progressive disclosure, references one level deep) — authored with `skill-creator`; the hard constraints live in the factory's Phase 3.3 checklist and `references/standalone-fallback.md`
 - A factory run produces `builds/<skill-name>/` with three zones: `input/` (human materials), `work/` (generated artifacts), `output/<skill-name>/` (the finished skill). `builds/` is gitignored.
 - `create-skill-autoresearch` is developed here (source of truth) and published as a byte-identical release to `a-tokyo/agent-skills` — never edit the published copy directly. See "Releasing create-skill-autoresearch" below.
 - Research notes go in `docs/thoughts/` with numbered prefixes (00-, 01-, etc.)

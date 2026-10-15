@@ -73,7 +73,6 @@ input/  ──►  [interview → research → draft → autoresearch → verify
 (you)              the factory works in work/                              (publish-ready)
 ```
 
-The finished skill follows the official skill-authoring rules (see
-`.agents/skills/create-skill-autoresearch/references/skill-authoring-best-practices.md`): `name` ≤ 64
-chars and free of reserved words,
+The finished skill follows the official skill-authoring rules (the factory's Phase 3.3 checklist,
+with `skill-creator` writing the draft): `name` ≤ 64 chars and free of reserved words,
 a third-person `description` stating what + when, body < 500 lines, references one level deep.
