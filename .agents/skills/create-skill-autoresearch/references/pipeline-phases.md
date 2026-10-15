@@ -7,7 +7,7 @@ Detailed instructions for each phase of the create-skill-autoresearch factory.
 - Phase 1: Interview -- Detailed Question Flow
 - Phase 2: Research -- Subagent Orchestration
 - Phase 3: Draft -- Design-First Approach (DESIGN.md template, `evaluate.sh` contract, judge templates)
-- Phase 4: Autoresearch -- Integration Details (data split, overfitting detection)
+- Phase 4: Autoresearch -- Integration Details (invocation, loop conventions, data split, overfitting detection)
 - Phase 5: Verify -- Panel Prompt Templates (Verifier-A/B, Devil's Advocate, synthesis)
 
 ---
@@ -31,7 +31,7 @@ Ask the user these questions directly (use whatever questioning mechanism your a
 - Probe for: docs, code, transcripts, specs, style guides, existing skills, external references
 
 **Q4 -- Constraints**: "Any constraints on the skill? Conventions? Integration points? Anti-patterns?"
-- Follow up: "Should the agent fire this skill on its own when it detects the need (model-invoked -- its description then occupies context every turn), or only when you type its name (user-invoked, `disable-model-invocation: true` -- zero context cost, but you must remember it exists)?" Record as `INVOCATION_MODE`; it drives the description style in Phase 3.3 (see skill-craft-principles.md).
+- Follow up: "Should the agent fire this skill on its own when it detects the need (model-invoked -- its description then occupies context every turn), or only when you type its name (user-invoked, `disable-model-invocation: true` -- zero context cost, but you must remember it exists)?" Record as `INVOCATION_MODE`; it drives the description style in Phase 3.3 (writing-for-agents; fallback: standalone-fallback.md).
 
 **Q5 -- Confirm**: Present the summary table. Wait for explicit confirmation.
 
@@ -302,15 +302,43 @@ For each dimension:
 
 ### Preparing the Autoresearch Invocation
 
-The factory prepares these inputs for the autoresearch skill:
+The factory runs the upstream **autoresearch** skill (github/awesome-copilot) and answers its
+interactive setup from these inputs, so the loop never waits on a user:
 
-1. **Goal statement**: "Improve <skill-name> quality as measured by LLM-as-judge scoring against gold standards"
+1. **Goal statement**: "Improve <skill-name> quality as measured by `overall_score` against gold standards"
 2. **Metric command**: `./work/evaluation/evaluate.sh` (must emit METRIC lines)
-3. **Primary metric**: `overall_score` (weighted average of all rubric dimensions)
-4. **In-scope files**: Only the skill being built (`output/<skill-name>/SKILL.md` and `output/<skill-name>/references/*`)
-5. **Out-of-scope**: Everything else (`input/` and `work/` — evaluation scripts, gold standards, research)
-6. **Budget**: From `rubric.yaml` `max_iterations` field
-7. **Checks**: `./work/evaluation/evaluate-checks.sh` if it exists
+3. **Metric extraction**: regex `^METRIC overall_score=([0-9.]+)$` on `run.log`
+4. **Direction**: `higher_is_better`
+5. **In-scope files**: only the skill being built (`output/<skill-name>/SKILL.md`, `references/*`, `scripts/*`)
+6. **Out-of-scope**: everything else (`input/` and `work/` — evaluation scripts, gold standards, research)
+7. **Budget**: `rubric.yaml` `max_iterations`
+8. **Constraints**: `./work/evaluation/evaluate-checks.sh`, if it exists, exits 0 before MEASURE
+
+### Loop Conventions the Factory Owns
+
+Upstream autoresearch keeps `results.tsv` and `run.log` and reverts with `git reset`. The factory
+adds the rest, and applies it in every experiment:
+
+- **Scoped commits.** Stage only in-scope paths (`git add output/<skill-name>`). Never `git add -A` —
+  it sweeps `work/` and session logs into experiment commits.
+- **Clean reverts.** Discard with `git reset --hard HEAD~1 && git clean -fd -- output/<skill-name>`,
+  so a reverted experiment leaves no new untracked files behind.
+- **Noise threshold.** Keep a change only if `overall_score` beats the best by more than the judge
+  noise threshold: the larger of 0.01 absolute minimum and the per-judge variance measured on the
+  baseline (re-run the baseline twice to estimate it). Gains inside the noise are discards.
+- **Plateau window.** `rubric.yaml` `plateau_window` (default 5) consecutive discards is a plateau;
+  SKILL.md 4.3 decides whether it is terminal.
+- **Baseline failure.** If the metric command fails on experiment 0 (no `METRIC overall_score` line,
+  non-zero exit), stop and fix `evaluate.sh` — never start the loop against a broken metric.
+- **Experiment record.** Append one line to `autoresearch.jsonl` per experiment:
+
+  ```json
+  { "experiment": 7, "commit": "abc1234", "metric": 0.81, "status": "keep",
+    "scores": { "clarity": 8.1 }, "hypothesis": "...", "learned": "...", "rollback_reason": null }
+  ```
+
+- **Context budget.** Read only the tail of `run.log` and the last few jsonl lines per THINK step;
+  when the session's context runs low, hand off (SKILL.md 4.4) rather than compress history.
 
 ### Seeding the Ideas Backlog
 
@@ -330,7 +358,7 @@ Before starting autoresearch, populate `autoresearch.ideas.md` with:
 ## From Gold Standard Analysis
 - [ ] <pattern in reference outputs the skill doesn't produce>
 
-## Craft Passes (see skill-craft-principles.md)
+## Craft Passes (writing-for-agents; fallback: standalone-fallback.md)
 - [ ] Leading-word hunt: collapse restated qualities and fuzzy gates into pretrained tokens
 - [ ] Pruning pass: sentence-level no-op test, duplication and sediment sweep
 - [ ] Disclosure rebalance: inline what every branch needs, disclose what only some reach
@@ -504,7 +532,7 @@ You are the last line of defense against shipping flawed work.
 4. Missing constraints: Inputs that produce wrong behavior?
 5. Drift risk: Dependencies that could break it?
 6. Spec gaps: What does the rubric require that this doesn't deliver?
-7. Craft failure modes: premature completion, duplication, sediment, sprawl, no-op lines (see references/skill-craft-principles.md)
+7. Craft failure modes: premature completion, duplication, sediment, sprawl, no-op lines (writing-for-agents; fallback: standalone-fallback.md)
 
 ## Escalation Power
 Write "ESCALATE: <reason>" if you identify a concern that:
