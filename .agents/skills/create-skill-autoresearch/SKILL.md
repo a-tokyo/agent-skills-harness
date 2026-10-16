@@ -95,8 +95,9 @@ quality signals it finds to `work/research/NN-<topic>.md`.
 ### 2.2 Synthesize Research
 
 After all researchers complete, write `work/research/00-synthesis.md`: cross-cutting patterns, the
-conventions the skill must follow, quality signals that separate good from bad output, and candidate
-rubric dimensions.
+conventions the skill must follow, quality signals, candidate rubric dimensions, and a **conflicts** table —
+every point where a study material contradicts the gold standards. **The gold standards win**: record each
+conflict with the gold evidence, and before the 3.5 baseline confirm the draft follows the gold side of every row.
 
 ### 2.3 Propose Rubric
 
@@ -208,8 +209,7 @@ Optionally create `work/evaluation/evaluate-checks.sh` for correctness gates.
 
 ### 3.5 Measure Baseline
 
-Run `evaluate.sh` on the test cases with the initial draft and record the scores as experiment 0.
-Report the baseline `overall_score` and its per-dimension breakdown to the user.
+Run `evaluate.sh` with the initial draft, record the scores as experiment 0, and report them to the user.
 
 ### 3.6 Scaffold the Eval Suite
 
