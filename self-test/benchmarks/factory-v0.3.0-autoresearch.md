@@ -33,7 +33,9 @@ Shipped: experiments 1, 2 and 5, plus `-j 4` on the gate command.
 Experiment 5 came from the release matrix, not the loop. The first release candidate regressed on
 task-2 with Haiku (median 0.932 vs v0.2.1's 0.969): two of five builds trusted the task's stale written
 policy over the gold standards, and one hard-coded its outdated approval thresholds. Neither version
-had a rule for that conflict. With the rule, the cell returned to 0.969 and no other cell dropped.
+had a rule for that conflict. With the rule, the cell returned to 0.969. One other cell moved down:
+task with Haiku went from a 0.918 median (candidate) to 0.871 (final), within that cell's spread
+(0.871–0.971).
 
 ## What the loop taught
 
