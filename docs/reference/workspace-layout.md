@@ -32,16 +32,17 @@ builds/<skill-name>/
       plugin/                     # Phase 3.6 wrapper plugin: .claude-plugin/plugin.json,
                                   #   skills/<name>/ (copy of output), evals/<case>/
       plugin-eval.json            # Phase 5.0 with/without result (WITH, W/OUT, delta per case)
+      uplift.json                 # Phase 5.0 manual with/without result, when plugin eval is unavailable
+                                  #   or the skill is user-invoked (replaces plugin-eval.json)
 
     experiments/
       DESIGN.md                   # Structural decisions locked before drafting
       craft-decisions.md          # Append-only iteration ledger (DNN format)
       improvement-notes.md        # Lesson -> improvement log across rounds (see below)
       OPEN-QUESTIONS.md           # Unresolved questions awaiting a human decision (see below)
-      autoresearch.md             # Session contract (goal, config, budget)
-      autoresearch.jsonl          # Machine log with ASI fields
-      results.tsv                 # Human-readable experiment journal
-      autoresearch.ideas.md       # Deferred hypothesis backlog
+      autoresearch.jsonl          # Factory-written machine log, one line per experiment
+      results.tsv                 # Human-readable experiment journal (upstream autoresearch)
+      autoresearch.ideas.md       # Factory-written hypothesis backlog
       run.log                     # Last evaluation command output
 
     handoffs/                     # Context preservation
@@ -120,9 +121,8 @@ first: `manifest.yaml`, `evaluation/rubric.yaml` (which holds the exit criteria)
 `evaluation/judges.yaml` and `evaluation/data-split.yaml`. Everything else is derived from those and
 gets rewritten, so edit the inputs rather than the outputs. See [tuning.md](tuning.md).
 
-**No credentials in any of these files.** Anything under `work/` may be committed when you run the
-factory inside your own project repo (see [Git Tracking](#git-tracking)), so a key written into
-`judges.yaml` becomes a key in your git history. Credentials belong in the environment.
+**No credentials in any of these files.** `work/` is committed in the workspace's own git repository
+(see [Git Tracking](#git-tracking)), so a key written into `judges.yaml` becomes a key in git history. Credentials belong in the environment.
 
 Subdirectories:
 
@@ -156,13 +156,12 @@ Autoresearch runs from the **build workspace root** (`builds/<skill-name>/`). Th
 the workspace root during an active session and are archived to `work/experiments/` when the
 session ends or on handoff.
 
-| Autoresearch creates at root | Archived to |
-|------------------------------|-------------|
-| `autoresearch.md` | `work/experiments/autoresearch.md` |
-| `autoresearch.jsonl` | `work/experiments/autoresearch.jsonl` |
-| `results.tsv` | `work/experiments/results.tsv` |
-| `run.log` | `work/experiments/run.log` |
-| `autoresearch.ideas.md` | `work/experiments/autoresearch.ideas.md` |
+| Session file at root | Written by | Archived to |
+|----------------------|------------|-------------|
+| `results.tsv` | upstream autoresearch | `work/experiments/results.tsv` |
+| `run.log` | upstream autoresearch | `work/experiments/run.log` |
+| `autoresearch.jsonl` | the factory | `work/experiments/autoresearch.jsonl` |
+| `autoresearch.ideas.md` | the factory | `work/experiments/autoresearch.ideas.md` |
 
 The upstream autoresearch skill keeps only `results.tsv` and `run.log`; the factory writes
 `autoresearch.jsonl` and `autoresearch.ideas.md` itself and runs `work/evaluation/evaluate-checks.sh`
@@ -174,9 +173,9 @@ factory's `references/pipeline-phases.md`.
 
 ## Git Tracking
 
-`builds/` is gitignored in this harness, so none of the below is tracked here — these are the
-recommendations for when you run the factory **inside your own project repo** and want to
-preserve the build.
+Each build workspace is its own git repository, because the Phase 4 loop resets it (factory
+SKILL.md 1.6). A workspace inside a parent project — `builds/` here, which this harness gitignores —
+is gitignored by the parent, and its files are tracked in the workspace's own repository:
 
 | File | Tracked? | Why |
 |------|----------|-----|
@@ -188,7 +187,6 @@ preserve the build.
 | `work/evaluation/judges.yaml` | Yes (if present) | Multi-judge config — **model names and weights only; a credential here would be committed** |
 | `work/experiments/DESIGN.md` | Yes | Design contract |
 | `work/experiments/craft-decisions.md` | Yes | Iteration history |
-| `work/experiments/autoresearch.md` | No | Session-specific |
 | `work/experiments/autoresearch.jsonl` | No | Session-specific |
 | `work/experiments/results.tsv` | No | Session-specific |
 | `work/experiments/run.log` | No | Transient output |
