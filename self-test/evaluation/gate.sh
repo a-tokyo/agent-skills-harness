@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Regression gate for the harness itself. Runs the deterministic structural checks and fails
 # unless every check passes or fails only for a reason recorded below as advisory; then runs the
-# factory's offline script tests, which must all pass.
+# factory's offline script tests and the parity script's tests, which must all pass.
 #
 # Why a gate rather than a raw check count: new checks get added over time, so comparing
 # `checks_passed` against a hardcoded number hides a regression behind a rising total. This
@@ -113,5 +113,15 @@ if ! PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s "$SCRIPT_TESTS
   exit 1
 fi
 tail -3 "$WORK/script-tests.txt"
+
+echo ""
+echo "--- Parity script tests ---"
+if ! bash "$HERE/test-check-parity.sh" >"$WORK/parity-tests.txt" 2>&1; then
+  cat "$WORK/parity-tests.txt" >&2
+  echo "" >&2
+  echo "GATE FAIL: the parity script tests failed (self-test/evaluation/test-check-parity.sh)." >&2
+  exit 1
+fi
+tail -1 "$WORK/parity-tests.txt"
 
 echo "GATE PASS"

@@ -10,7 +10,8 @@
 #   bash .github/scripts/check-parity.sh . ../agent-skills
 #
 # Exit 0 = identical (or the published copy is absent, which is not this repo's fault).
-# Exit 1 = diverged.
+# Exit 1 = diverged, or the marketplace entry's version differs from the factory's frontmatter.
+# Tested by self-test/evaluation/test-check-parity.sh (run by the gate).
 set -eu
 
 HARNESS="${1:-.}"
@@ -71,7 +72,8 @@ PY
   )"
   echo "check-parity: marketplace entry version  = ${entry_version:-<none>}"
   if [ -n "$entry_version" ] && [ "$src_version" != "$entry_version" ]; then
-    echo "check-parity: WARNING version mismatch — bump the marketplace entry to $src_version when publishing." >&2
+    echo "check-parity: version MISMATCH — the marketplace entry says $entry_version, the frontmatter $src_version; bump them together." >&2
+    status=1
   fi
 else
   echo "check-parity: no marketplace manifest at $manifest; nothing to compare."
