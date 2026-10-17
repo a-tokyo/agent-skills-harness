@@ -20,9 +20,11 @@ skill does not separate.
 **With Claude Code, prefer `claude plugin eval --ablation with-without`.** It runs every case in fresh
 sessions with and without the skill and reports WITH, W/OUT and Δ — the same-model uplift above, as a
 supported CLI with free deterministic graders (`regex` on output files, `tool_used`) and an HTML report.
-The factory builds this suite in Phase 3.6 and runs it as the Phase 5.0 gate. Gated tools a skill needs
-(Bash, Write) must be granted with `--allow-tools`, fixtures need `--scaffold`, and the model should be
-pinned with `--model`. Without Claude Code, run the arms by hand as below.
+The factory builds this suite in Phase 3.6 and runs it as the Phase 5.0 gate through its bundled
+`scripts/gate.py`, which passes `--allow-tools` for the gated tools a skill needs (Bash, Write),
+`--scaffold` for fixtures and a pinned `--model`; `scripts/check_gate.py` then refuses an incomplete
+artifact. Without Claude Code, `gate.py` runs the same cases by the manual protocol; outside the factory,
+run the arms by hand as below.
 
 ## Two caveats that decide whether a number means anything
 

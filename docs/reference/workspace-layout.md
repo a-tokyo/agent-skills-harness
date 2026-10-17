@@ -29,11 +29,16 @@ builds/<skill-name>/
       evaluate-checks.sh          # Optional correctness gate
       judges.yaml                 # Optional multi-judge configuration
       data-split.yaml             # Train/validation/test assignment (+ plugin_eval case list)
+      run-case.sh                 # Phase 3.6 manual-protocol adapter: one run of <case> <with|without>,
+                                  #   prints SCORE=<0..1>
       plugin/                     # Phase 3.6 wrapper plugin: .claude-plugin/plugin.json,
-                                  #   skills/<name>/ (copy of output), evals/<case>/
+                                  #   skills/<name>/ (copy of output, refreshed by gate.py), evals/<case>/
+      gate.json                   # Phase 5.0 gate record: mode (plugin | manual), probe exit code, cases
       plugin-eval.json            # Phase 5.0 with/without result (WITH, W/OUT, delta per case)
       uplift.json                 # Phase 5.0 manual with/without result, when plugin eval is unavailable
                                   #   or the skill is user-invoked (replaces plugin-eval.json)
+
+    pids/                         # run_owned.py job records (<name>.json: pid, pgid, cmd), logs, exit codes
 
     experiments/
       DESIGN.md                   # Structural decisions locked before drafting
@@ -129,6 +134,13 @@ Subdirectories:
 - `manifest.yaml` — the factory's index of the gold standards found in `input/`, tagged train/validation/test.
 - `research/` — Phase 2 notes from parallel subagent exploration. `00-synthesis.md` is the cross-cutting synthesis (read first); numbered notes correspond to study-material clusters.
 - `evaluation/` — the scoring infrastructure: `rubric.yaml` (dimensions, weights, criteria, and the exit criteria `target_score`/`max_iterations`/`plateau_window`), `evaluate.sh` (the script autoresearch calls), the optional `evaluate-checks.sh` correctness gate, `judges.yaml` (judge models and weights — names only, never a credential), and `data-split.yaml` (which gold standards are training vs held out).
+  Phase 3.6 adds `run-case.sh`, and Phase 5.0 writes the gate artifacts through the factory's bundled
+  scripts — never by hand: `scripts/gate.py` picks the mode, runs the suite and writes `gate.json` plus
+  `plugin-eval.json` or `uplift.json`; `scripts/check_gate.py` exits non-zero unless that artifact is
+  complete and covers exactly the `plugin_eval` cases, and Phase 5.2 does not start until it passes.
+- `pids/` — one record per background job started with the factory's `scripts/run_owned.py` (pid,
+  process group, command, log, exit code). `run_owned.py stop <name>` signals only a group recorded here,
+  so a build never stops another build's processes. Transient; not committed.
 - `experiments/` — all experimentation artifacts: `DESIGN.md` (structural decisions locked before the first draft), `craft-decisions.md` (per-iteration ledger), the autoresearch session files, and `run.log`.
 - `handoffs/` — cross-session continuity (`state.yaml` for automatic resume, `HANDOFF-*.md` for rich human-readable context).
 
@@ -185,6 +197,9 @@ is gitignored by the parent, and its files are tracked in the workspace's own re
 | `work/evaluation/rubric.yaml` | Yes | Scoring definition |
 | `work/evaluation/evaluate.sh` | Yes | Evaluation logic |
 | `work/evaluation/judges.yaml` | Yes (if present) | Multi-judge config — **model names and weights only; a credential here would be committed** |
+| `work/evaluation/data-split.yaml` | Yes | Split and gate cases; leave-one-out rotation commits it on its own so experiment reverts cannot roll it back |
+| `work/evaluation/run-case.sh`, `gate.json`, `plugin-eval.json` / `uplift.json` | Yes | Gate adapter, record and evidence |
+| `work/pids/*` | No | Transient process records |
 | `work/experiments/DESIGN.md` | Yes | Design contract |
 | `work/experiments/craft-decisions.md` | Yes | Iteration history |
 | `work/experiments/autoresearch.jsonl` | No | Session-specific |
