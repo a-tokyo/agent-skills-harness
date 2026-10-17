@@ -121,7 +121,7 @@ Working inside a larger monorepo or AI workspace? A clean arrangement is to keep
 **Runs immediately on a fresh clone** — no credentials, no network, just `bash` and `python3`:
 
 ```bash
-npm test        # the gate: structural checks + a written allowlist of advisory failures
+npm test        # the gate: structural checks + a written allowlist of advisory failures + script tests
 ```
 
 That wraps `self-test/evaluation/autoresearch-evaluate.sh`, which you can also run directly for the

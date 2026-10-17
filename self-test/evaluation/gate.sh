@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Regression gate for the harness itself. Runs the deterministic structural checks and fails
-# unless every check passes or fails only for a reason recorded below as advisory.
+# unless every check passes or fails only for a reason recorded below as advisory; then runs the
+# factory's offline script tests, which must all pass.
 #
 # Why a gate rather than a raw check count: new checks get added over time, so comparing
 # `checks_passed` against a hardcoded number hides a regression behind a rising total. This
@@ -98,5 +99,19 @@ if [ "$((passed + advisory_count))" -ne "$total" ]; then
   echo "A check failed without reporting an issue line; the checker is unreliable until that is fixed." >&2
   exit 1
 fi
+
+# The factory's bundled scripts (gate runner, validator, process wrapper) ship with offline tests:
+# a fake `claude` on PATH, fake run-case.sh adapters, temp workspaces. -B and the env var keep
+# __pycache__ out of the shipped skill directory.
+SCRIPT_TESTS=".agents/skills/create-skill-autoresearch/scripts/tests"
+echo ""
+echo "--- Script tests ---"
+if ! PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s "$SCRIPT_TESTS" >"$WORK/script-tests.txt" 2>&1; then
+  cat "$WORK/script-tests.txt" >&2
+  echo "" >&2
+  echo "GATE FAIL: the factory's script tests failed ($SCRIPT_TESTS)." >&2
+  exit 1
+fi
+tail -3 "$WORK/script-tests.txt"
 
 echo "GATE PASS"
