@@ -33,9 +33,9 @@ Shipped: experiments 1, 2 and 5, plus `-j 4` on the gate command.
 Experiment 5 came from the release matrix, not the loop. The first release candidate regressed on
 task-2 with Haiku (median 0.932 vs v0.2.1's 0.969): two of five builds trusted the task's stale written
 policy over the gold standards, and one hard-coded its outdated approval thresholds. Neither version
-had a rule for that conflict. With the rule, the next candidate run reached 0.969. The final release
-run, which also carries the tribunal round-1 and round-2 fixes, has task-2 with Haiku at 0.955:
-inside the pooled run-to-run spread, but below v0.2.1's worst build (0.958).
+had a rule for that conflict. With the rule, the next candidate run reached 0.969. The published
+release run, which also carries the tribunal fixes and the cycle-2 scripts, has task-2 with Haiku at
+0.905: above the pooled floor (0.851), but every build is below v0.2.1's worst (0.958).
 
 ## What the loop taught
 
@@ -45,15 +45,15 @@ inside the pooled run-to-run spread, but below v0.2.1's worst build (0.958).
 - **Wording does not make an agent run an expensive step; a check with a fallback does.** "Never
   skip the gate" changed nothing. A checkable completion criterion (experiment 4) got the gate to run
   in half the builds, which took 79 minutes and over two hours for an unchanged output score. The
-  release makes gate availability a check and requires an uplift artifact either way (plugin eval or
-  the manual with/without protocol); in the final release run 14 of 20 builds wrote one, so even a
-  checked requirement is not followed every time unattended. The gate measures uplift rather than
-  raising quality.
+  release requires an uplift artifact either way (plugin eval or the manual with/without protocol).
+  Written as prose, 13 of 20 builds wrote it at its canonical path; run as bundled scripts
+  (`gate.py`, then the `check_gate.py` validator), 20 of 20 did and 18 passed the validator. The gate
+  measures uplift rather than raising quality.
 - **The final matrix finds what the loop cannot.** The loop measured one cell (task-2, Haiku); the
   regression E5 targeted only showed up at n=5 there, against a v0.2.1 baseline.
 - **Two builds per measurement is too few.** One bad build moved experiment 3's median past the noise
   threshold on its own; experiment 4 used four.
 
 The before/after comparison against v0.2.1 (n=5 per cell, both tasks, Sonnet 5.5 and Haiku 5.5;
-v0.3.0 is the final `i-*` run at harness `8f6a323`) is published in
+v0.3.0 is the cycle-2 `j-*` run at harness `5ca4fa0`), with its fidelity counts, is published in
 [Results — October 2026](https://github.com/a-tokyo/agent-skills/tree/main/benchmarks/create-skill-autoresearch#results--october-2026-v021-vs-v030).
