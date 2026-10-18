@@ -75,6 +75,31 @@ PY
     echo "check-parity: version MISMATCH — the marketplace entry says $entry_version, the frontmatter $src_version; bump them together." >&2
     status=1
   fi
+  # A marketplace entry with source "./" roots the plugin at the repo, so the skill's own
+  # hooks/hooks.json never loads there: each entry that installs the factory repeats its hooks
+  # inline, re-rooted at skills/create-skill-autoresearch/.
+  if [ -f "$SRC/hooks/hooks.json" ]; then
+    if ! python3 - "$manifest" "$SRC/hooks/hooks.json" <<'PY'
+import json, sys
+with open(sys.argv[1]) as fh:
+    plugins = json.load(fh).get("plugins", [])
+with open(sys.argv[2]) as fh:
+    hooks = json.load(fh)["hooks"]
+want = json.loads(json.dumps(hooks).replace("${CLAUDE_PLUGIN_ROOT}/",
+                                            "${CLAUDE_PLUGIN_ROOT}/skills/create-skill-autoresearch/"))
+ships = [p for p in plugins if any(s.rstrip("/") in ("./skills", "./skills/create-skill-autoresearch")
+                                   for s in p.get("skills", []))]
+bad = [p.get("name") for p in ships if p.get("hooks") != want]
+if bad:
+    print(f"check-parity: HOOKS MISSING — marketplace entries {bad} install the factory without the hooks "
+          "in its hooks/hooks.json (re-rooted at skills/create-skill-autoresearch/)", file=sys.stderr)
+    sys.exit(1)
+print(f"check-parity: marketplace hooks match hooks/hooks.json in {[p.get('name') for p in ships]}")
+PY
+    then
+      status=1
+    fi
+  fi
 else
   echo "check-parity: no marketplace manifest at $manifest; nothing to compare."
 fi
