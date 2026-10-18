@@ -28,7 +28,8 @@ builds/<skill-name>/
       evaluate.sh                 # METRIC-emitting evaluation script
       evaluate-checks.sh          # Optional correctness gate
       judges.yaml                 # Optional multi-judge configuration
-      data-split.yaml             # Train/validation/test assignment (+ plugin_eval case list)
+      data-split.yaml             # Train/validation/test assignment (+ plugin_eval case list, written by
+                                  #   scripts/gate.py record from disk)
       run-case.sh                 # Phase 3.6 manual-protocol adapter: one run of <case> <with|without>,
                                   #   prints SCORE=<0..1>
       plugin/                     # Phase 3.6 wrapper plugin: .claude-plugin/plugin.json,
