@@ -39,8 +39,9 @@ builds/<skill-name>/
       uplift.json                 # Phase 5.0 manual with/without result, when plugin eval is unavailable
                                   #   or the skill is user-invoked (replaces plugin-eval.json)
 
-    pids/                         # run_owned.py job records (<name>.json: pid, pgid, start time, cmd), logs,
-                                  #   exit codes; gate.json/gate.log for the `gate` job; .gitignore (*)
+    pids/                         # run_owned.py job records (<name>.json: pid, pgid, supervisor, cmd), logs,
+                                  #   exit codes, <name>.lock (held by the live supervisor), <name>.stop
+                                  #   (stop request); gate.json/gate.log for the `gate` job; .gitignore (*)
 
     experiments/
       DESIGN.md                   # Structural decisions locked before drafting
@@ -140,13 +141,16 @@ Subdirectories:
   scripts — never by hand: `scripts/gate.py` (run as the owned job `gate`, started with `--detach` and
   polled with `run_owned.py wait gate`) picks the mode, runs the suite and writes `gate.json` plus
   `plugin-eval.json` or `uplift.json`; `scripts/check_gate.py` exits non-zero unless `gate.json` records a
-  finished run whose skill and case hashes still match and that artifact is complete (`"partial": false`)
-  and covers exactly the `plugin_eval` cases. Phase 5.2 does not start, and 5.4 writes no SHIP verdict,
-  until it passes.
+  finished run whose hashes (skill, cases, `run-case.sh`, the scorer and fixture files under `input/` and
+  `evaluation/`, the artifact) still match, at least one case is a gold case with a numeric delta, and that
+  artifact is complete (`"partial": false`) and covers exactly the `plugin_eval` cases. Phase 5.2 does not
+  start, and 5.4 writes no SHIP verdict, until it passes.
 - `pids/` — one record per background job started with the factory's `scripts/run_owned.py` (pid,
-  process group, the leader's start time, command, log, exit code). `run_owned.py stop <name>` signals
-  only a group recorded here, and only while the recorded start time still matches, so a build never
-  stops another build's processes. Transient; `run_owned.py` writes a `.gitignore` of `*` here.
+  process group, supervisor pid, the leader's start time when `ps` can read it, command, log, exit
+  code). Each job runs under a supervisor that holds `<name>.lock` while it lives; `run_owned.py stop
+  <name>` writes `<name>.stop` and the supervisor stops only its own child group, so a build never stops
+  another build's processes and nothing needs `ps`. Transient; `run_owned.py` writes a `.gitignore` of
+  `*` here.
 - `experiments/` — all experimentation artifacts: `DESIGN.md` (structural decisions locked before the first draft), `craft-decisions.md` (per-iteration ledger), the autoresearch session files, and `run.log`.
 - `handoffs/` — cross-session continuity (`state.yaml` for automatic resume, `HANDOFF-*.md` for rich human-readable context).
 
