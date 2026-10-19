@@ -80,7 +80,7 @@ import check_gate  # noqa: E402  (sibling imports after disabling bytecode)
 import run_owned  # noqa: E402
 from gate_common import (  # noqa: E402
     DATA_SPLIT, GATE_RECORD, MANUAL_ARTIFACT, PLUGIN_ARTIFACT, PLUGIN_DIR, REQUIRED_RUNS, RUN_CASE,
-    GateError, cases_sha256, file_sha256, inputs_sha256, model_invoked, read_data_split, resolve_skill,
+    GateError, cases_sha256, file_sha256, inputs_sha256, model_invoked, omitted_gold, read_data_split, resolve_skill,
     log_attempt, skill_sha256, utf8_stdio, write_gate_cases, write_json,
 )
 
@@ -239,6 +239,12 @@ def record_cases(ws: Path, skill: str) -> tuple[list[str], str, int | str, bool]
         if not cases:
             raise GateError(f"{DATA_SPLIT} lists no gold standards (all_cases, training, validation or test; "
                             "4.2); the manual protocol runs one gate case per gold standard")
+        omitted = omitted_gold(ws, [c for key in ("all_cases", "training", "validation", "test")
+                                    for c in split.gold.get(key, [])])
+        if omitted:
+            raise GateError(f"{DATA_SPLIT} leaves out gold standards found on disk: {', '.join(omitted)}; list each "
+                            "under all_cases, training, validation or test (4.2), or move a file that is not a "
+                            "gold standard out of that folder")
     write_gate_cases(ws / DATA_SPLIT, cases, available, source)
     return cases, mode, available, invoked
 

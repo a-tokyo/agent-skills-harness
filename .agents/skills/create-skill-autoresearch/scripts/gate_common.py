@@ -25,6 +25,7 @@ Finder creates without changing what ships.
 
 from __future__ import annotations
 
+import glob
 import hashlib
 import json
 import os
@@ -202,6 +203,40 @@ def write_gate_cases(path: Path, cases: list[str], available: int | str, source:
         else:
             lines[at:_block_end(lines, at)] = block
     write_text(path, "\n".join(lines) + "\n")
+
+
+_MANIFEST_INPUT = re.compile(r"""(?:^|[\s{,-])input:\s*["']?([^"',}\s#]+)""")
+
+
+def _case_file(ws: Path, entry: str) -> Path | None:
+    """The file a gold-standard entry names: a path from the workspace root, or the one file under input/
+    called <entry>.<ext>."""
+    if (ws / entry).is_file():
+        return (ws / entry).resolve()
+    found = [p for p in (ws / "input").rglob(f"{glob.escape(entry)}.*") if p.is_file()] if (ws / "input").is_dir() else []
+    return found[0].resolve() if len(found) == 1 else None
+
+
+def omitted_gold(ws: Path, listed: list[str]) -> list[str]:
+    """Gold standards on disk that the split's lists leave out: every `input:` path in work/manifest.yaml,
+    and every file beside a listed case file that differs from it only in its numbers (listing
+    input/input-01.md covers input/input-02.md, input/input-03.md, ...). Only entries that name a file
+    are checked, so case names that are not files never trip it."""
+    ws = ws.resolve()
+    listed_files = {f for entry in listed if (f := _case_file(ws, entry))}
+    if not listed_files:
+        return []
+    on_disk: set[Path] = set()
+    for path in listed_files:
+        pattern = re.compile(re.sub(r"\d+", r"\\d+", re.escape(path.name)))
+        if pattern.pattern != re.escape(path.name):
+            on_disk.update(p for p in path.parent.iterdir() if p.is_file() and pattern.fullmatch(p.name))
+    manifest = ws / "work" / "manifest.yaml"
+    if manifest.is_file():
+        for match in _MANIFEST_INPUT.finditer(manifest.read_text(encoding="utf-8", errors="replace")):
+            if (ws / match.group(1)).is_file():
+                on_disk.add((ws / match.group(1)).resolve())
+    return sorted(p.relative_to(ws).as_posix() for p in on_disk - listed_files)
 
 
 def utf8_stdio() -> None:

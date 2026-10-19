@@ -734,6 +734,31 @@ class RecordTest(TempWorkspace):
         self.assertEqual(self.split().plugin_eval, ["input/a.md", "input/b.md", "input/c.md"],
                          "3-9 band: every gold standard, the held-out one included")
 
+    def manual_files(self, *names: str) -> None:
+        self.make_build([f"input/{n}" for n in ("input-01.md", "input-02.md")], invoked=False)
+        (self.ws / "input").mkdir()
+        for name in names:
+            (self.ws / "input" / name).write_text(name)
+
+    def test_manual_record_reports_a_gold_standard_left_out_of_the_split(self) -> None:
+        self.manual_files("input-01.md", "input-02.md", "input-03.md", "output-01.md", "notes.md")
+        out = self.run_script("gate.py", "record")
+        self.assertEqual(out.returncode, 3, out.stdout)
+        self.assertIn("leaves out gold standards found on disk: input/input-03.md;", out.stderr)
+
+    def test_manual_record_reports_a_manifest_gold_standard_left_out(self) -> None:
+        self.manual_files("input-01.md", "input-02.md", "edge-case.md")
+        (self.ws / "work" / "manifest.yaml").write_text(
+            "pairs:\n  - input: input/input-01.md\n  - {input: input/edge-case.md, reference: input/x.md}\n")
+        out = self.run_script("gate.py", "record")
+        self.assertEqual(out.returncode, 3, out.stdout)
+        self.assertIn("input/edge-case.md", out.stderr)
+
+    def test_manual_record_accepts_a_complete_split(self) -> None:
+        self.manual_files("input-01.md", "input-02.md", "output-01.md", "output-02.md")
+        out = self.run_script("gate.py", "record")
+        self.assertEqual(out.returncode, 0, out.stderr)
+
     def test_manual_record_needs_gold_standards(self) -> None:
         self.make_build([], invoked=False)
         out = self.run_script("gate.py", "record")
