@@ -33,7 +33,7 @@ step in work/evaluation/gate-attempts.jsonl, and a gate run started (gate.json) 
 
     check_gate.py [--workspace DIR] [--skill NAME] [--min-runs N] [--json] [--finish]
 
-Tested on macOS and Linux. Exit codes: 0 valid (--finish: finished), 1 invalid (unfinished), 2 usage error.
+Tested on macOS, Linux and Windows. Exit codes: 0 valid (--finish: finished), 1 invalid (unfinished), 2 usage error.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ sys.dont_write_bytecode = True
 import run_owned  # noqa: E402  (sibling imports after disabling bytecode)
 from gate_common import (  # noqa: E402
     DATA_SPLIT, GATE_ATTEMPTS, GATE_RECORD, MANUAL_ARTIFACT, PLUGIN_ARTIFACT, REQUIRED_RUNS, RUN_CASE, GateError,
-    cases_sha256, file_sha256, inputs_sha256, read_attempts, read_data_split, skill_sha256,
+    cases_sha256, file_sha256, inputs_sha256, read_attempts, read_data_split, skill_sha256, utf8_stdio,
 )
 
 BENCHMARK = Path("BENCHMARK.md")
@@ -111,7 +111,7 @@ def _gate_record(workspace: Path, skill: str | None, recorded: list[str]) -> dic
         raise Invalid("no_gate_record", f"no {GATE_RECORD}: the artifact was not written by a gate run; "
                                         "run scripts/gate.py (5.0)")
     try:
-        record = json.loads(path.read_text())
+        record = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise Invalid("bad_gate_record", f"{GATE_RECORD} is not valid JSON: {exc}") from exc
     if not isinstance(record, dict) or record.get("mode") not in ("plugin", "manual"):
@@ -138,7 +138,7 @@ def _gate_record(workspace: Path, skill: str | None, recorded: list[str]) -> dic
     then, now = record["inputs_sha256"] or {}, inputs_sha256(workspace)
     changed = sorted(p for p in then.keys() | now.keys() if then.get(p) != now.get(p))
     if file_sha256(workspace / RUN_CASE) != record["run_case_sha256"]:
-        changed.insert(0, str(RUN_CASE))
+        changed.insert(0, RUN_CASE.as_posix())
     if changed:
         shown = ", ".join(changed[:5]) + (f" and {len(changed) - 5} more" if len(changed) > 5 else "")
         raise Invalid("stale_inputs", f"gate inputs changed since the gate; re-run 5.0 ({shown})")
@@ -255,7 +255,7 @@ def validate(workspace: Path, skill: str | None = None, min_runs: int = REQUIRED
             raise Invalid("stale_inputs", f"gate inputs changed since the gate; re-run 5.0 ({rel} is not the "
                                           "artifact the gate wrote)")
         try:
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             raise Invalid("bad_artifact", f"{rel} is not valid JSON: {exc}") from exc
         if not isinstance(data, dict):
@@ -266,11 +266,11 @@ def validate(workspace: Path, skill: str | None = None, min_runs: int = REQUIRED
                                      "(every case grades only `tool_used` on Skill); 3.6 adds one per gate "
                                      "gold standard")
     except Invalid as exc:
-        return Verdict(False, mode, None if rel is None else str(rel), exc.reason, code=exc.code)
+        return Verdict(False, mode, None if rel is None else rel.as_posix(), exc.reason, code=exc.code)
 
     gold = [r for r in results if r.kind == "gold"]
     return Verdict(
-        True, mode, str(rel), "ok", cases=len(results), gold_cases=len(gold),
+        True, mode, rel.as_posix(), "ok", cases=len(results), gold_cases=len(gold),
         mean_delta=_mean([r.delta for r in gold if r.delta is not None]),
         non_positive=[r.name for r in gold if r.delta is not None and r.delta <= 0],
         triggers={r.name: r.trigger for r in results if r.trigger is not None},
@@ -292,7 +292,8 @@ def finish(workspace: Path, skill: str | None = None, min_runs: int = REQUIRED_R
     bench = workspace / BENCHMARK
     if not bench.is_file():
         return False, None, f"no {BENCHMARK} at the build root; carry Phase 5 through 5.4 to a terminal verdict"
-    match = VERDICT_LINE.search(bench.read_text(errors="replace"))
+    text = bench.read_text(encoding="utf-8", errors="replace")
+    match = VERDICT_LINE.search(text)
     if not match:
         return False, None, f"{BENCHMARK} has no `Verdict: <label>` line (SHIP, SHIP WITH CAVEATS or UNSHIPPED)"
     verdict = re.sub(r"[ _]+", " ", match.group(1).upper())
@@ -312,12 +313,13 @@ def finish(workspace: Path, skill: str | None = None, min_runs: int = REQUIRED_R
         gate = validate(workspace, skill, min_runs)
         if not gate.valid:
             return False, verdict, f"{verdict} needs a valid gate: {gate.line()}; return to 5.0"
-        if "GATE VALID:" not in bench.read_text(errors="replace"):
+        if "GATE VALID:" not in text:
             return False, verdict, f"{BENCHMARK} lacks check_gate.py's GATE VALID line beside the {verdict} verdict"
     return True, verdict, "ok"
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_stdio()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--workspace", type=Path, default=Path("."), help="build workspace root (default: .)")
     parser.add_argument("--skill", help="skill name under output/ (default: the one gate.json records)")
