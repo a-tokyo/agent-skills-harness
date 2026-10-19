@@ -46,10 +46,11 @@ RUN_CASE = EVAL_DIR / "run-case.sh"
 PLUGIN_DIR = EVAL_DIR / "plugin"
 GATE_ATTEMPTS = EVAL_DIR / "gate-attempts.jsonl"
 REQUIRED_RUNS = 3
-# Hashed elsewhere (run-case.sh, data-split.yaml) or written by the gate itself.
+# Hashed elsewhere (run-case.sh, data-split.yaml) or written by the gate itself: its records, the skill
+# copy it refreshes into the wrapper plugin before each run, and what claude plugin eval writes there.
 _NOT_INPUTS = {p.as_posix() for p in (PLUGIN_ARTIFACT, MANUAL_ARTIFACT, GATE_RECORD, DATA_SPLIT, RUN_CASE,
                                       GATE_ATTEMPTS)}
-_SCRATCH_SUFFIXES = {".tmp", ".out", ".log"}
+_GENERATED_DIRS = tuple(f"{d.as_posix()}/" for d in (PLUGIN_DIR / "skills", PLUGIN_DIR / "evals" / "results"))
 
 GOLD_KEYS = ("all_cases", "training", "validation", "test")
 _GATE_KEYS = ("plugin_eval", "plugin_eval_available")
@@ -269,19 +270,20 @@ def file_sha256(path: Path) -> str | None:
 
 
 def _gate_input(path: Path, ws: Path) -> bool:
-    rel = path.relative_to(ws)
-    if rel.parts[:2] != EVAL_DIR.parts:
+    rel = path.relative_to(ws).as_posix()
+    if not rel.startswith(f"{EVAL_DIR.as_posix()}/"):
         return True
-    return not (rel.parts[2] == PLUGIN_DIR.name or rel.as_posix() in _NOT_INPUTS or path.name.startswith(".")
-                or path.suffix in _SCRATCH_SUFFIXES or path.name.endswith(".prev.json"))
+    return not (rel in _NOT_INPUTS or rel.startswith(_GENERATED_DIRS)
+                or path.name.endswith((".tmp", ".prev.json")))
 
 
 def inputs_sha256(workspace: Path) -> dict[str, str]:
-    """sha256 of every file the gate cases can resolve to outside the suite: the gold standards and
-    fixtures under input/, and the scorers under work/evaluation/ (score scripts, rubrics, fixtures).
-    Skipped there: plugin/ (the skill and case hashes cover it), run-case.sh (hashed on its own), what
-    the gate writes, data-split.yaml (the case hash covers plugin_eval), dotfiles and *.tmp / *.out /
-    *.log scratch."""
+    """sha256 of every file a gate case can resolve to: the gold standards and fixtures under input/, and
+    everything under work/evaluation/ — scorers, rubrics, fixtures, golden files and the wrapper plugin
+    (its manifest, shared mocks and case files). Skipped there: run-case.sh (hashed on its own),
+    data-split.yaml (the case hash covers plugin_eval), what the gate writes (gate.json, the artifacts,
+    gate-attempts.jsonl, *.prev.json, *.tmp), plugin/skills/ (refreshed from output/<skill>/, which the
+    skill hash covers) and plugin/evals/results/ (claude plugin eval's own output)."""
     found = {}
     for root in (workspace / "input", workspace / EVAL_DIR):
         if root.is_dir():

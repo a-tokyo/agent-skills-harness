@@ -959,7 +959,9 @@ class GateManualTest(TempWorkspace):
         out = self.run_script("gate.py", "--model", "m", "--executor", "single-call")
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         record = self.evaluation("gate.json")
-        self.assertEqual(sorted(record["inputs_sha256"]), ["input/po-01.json", "work/evaluation/score.py"])
+        self.assertEqual(sorted(record["inputs_sha256"]), [
+            "input/po-01.json", "work/evaluation/plugin/.claude-plugin/plugin.json",
+            "work/evaluation/plugin/evals/input-01/prompt.md", "work/evaluation/score.py"])
         self.assertEqual(record["artifact_sha256"],
                          gate_common.file_sha256(self.ws / "work" / "evaluation" / "uplift.json"))
 
@@ -969,12 +971,27 @@ class GateManualTest(TempWorkspace):
         self.assertTrue(verdict["reason"].startswith("gate inputs changed since the gate; re-run 5.0"))
         self.assertIn(changed, verdict["reason"])
 
-    def test_scratch_files_after_the_gate_are_not_inputs(self) -> None:
+    def test_what_the_gate_writes_is_not_an_input(self) -> None:
         self.manual_gate()
         evaluation = self.ws / "work" / "evaluation"
-        for scratch in (".cases.tmp", "check_gate.out", "notes.log", "uplift.prev.json"):
-            (evaluation / scratch).write_text("x")
+        for generated in (".cases.tmp", "uplift.prev.json", "plugin/skills/demo/SKILL.md",
+                          "plugin/evals/results/run-1/report.html"):
+            (evaluation / generated).parent.mkdir(parents=True, exist_ok=True)
+            (evaluation / generated).write_text("x")
         self.assertEqual(self.run_script("check_gate.py").returncode, 0)
+
+    def test_golden_out_file_after_the_gate_is_stale(self) -> None:
+        self.manual_gate()
+        (self.ws / "work" / "evaluation" / "expected.out").write_text("golden")
+        self.assert_stale("work/evaluation/expected.out")
+
+    def test_plugin_manifest_or_shared_mock_edit_after_the_gate_is_stale(self) -> None:
+        self.manual_gate()
+        (self.ws / "work" / "evaluation" / "plugin" / ".claude-plugin" / "plugin.json").write_text("{}")
+        self.assert_stale("work/evaluation/plugin/.claude-plugin/plugin.json")
+        (self.ws / "work" / "evaluation" / "plugin" / "mocks").mkdir()
+        (self.ws / "work" / "evaluation" / "plugin" / "mocks" / "api.json").write_text("{}")
+        self.assert_stale("work/evaluation/plugin/mocks/api.json")
 
     def test_adapter_edit_after_the_gate_is_stale(self) -> None:
         self.manual_gate()
