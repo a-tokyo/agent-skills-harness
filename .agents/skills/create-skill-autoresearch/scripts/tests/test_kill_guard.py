@@ -351,7 +351,18 @@ class LauncherTest(unittest.TestCase):
         self.assertEqual(self.launch(bash("taskkill /IM node.exe"), env).returncode, 2)
         self.assertEqual(json.loads(self.launch(cursor("ls"), env).stdout), {"permission": "allow"})
 
-    @unittest.skipIf(WINDOWS, "symlinks need privileges on Windows; the real PATH run covers py -3 there")
+    def test_runs_with_python3_taken_off_path(self) -> None:
+        dirs = [d for d in os.environ["PATH"].split(os.pathsep)
+                if d and not any(os.path.exists(os.path.join(d, n)) for n in ("python3", "python3.exe"))]
+        path = os.pathsep.join(dirs)
+        if not any(shutil.which(n, path=path) for n in ("python", "py")):
+            self.skipTest("no python or py left once python3 is off PATH")
+        env = {**os.environ, "PATH": path, "PYTHONDONTWRITEBYTECODE": "1"}
+        blocked = self.launch(bash("taskkill /IM node.exe"), env)
+        self.assertEqual(blocked.returncode, 2, blocked.stderr)
+        self.assertEqual(json.loads(self.launch(cursor("ls"), env).stdout), {"permission": "allow"})
+
+    @unittest.skipIf(WINDOWS, "symlinks need privileges on Windows; the python3-off-PATH run covers it there")
     def test_falls_back_to_python_past_a_store_stub_python3(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             env = python_only_as(Path(tmp), "python")
