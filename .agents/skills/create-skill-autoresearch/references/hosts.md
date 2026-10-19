@@ -64,8 +64,8 @@ is installed.
 
 | Host | Ships as | Install | Status |
 |---|---|---|---|
-| Claude Code | `hooks/hooks.json` (`PreToolUse`, `Bash`) | plugin install, or `claude --plugin-dir <skill-dir>` | verified (plugin load, smoke run) |
-| Cursor | `.cursor-plugin/plugin.json` → `hooks/cursor-hooks.json` (`beforeShellExecution`) | plugin install; or for an `npx skills` install add the hook to `.cursor/hooks.json` (below) | contract tested offline; verified live as a project hook under `cursor-agent` (blocked a `pkill`, allowed the next command); the plugin install path is untested |
+| Claude Code | `hooks/hooks.json` (`PreToolUse`, `Bash`) | plugin install, or `claude --plugin-dir <skill-dir>` | verified live (`claude -p --plugin-dir`: blocked a `killall`, ran the next command) |
+| Cursor | `.cursor-plugin/plugin.json` → `hooks/cursor-hooks.json` (`beforeShellExecution`) | plugin install; or for an `npx skills` install add the hook to `.cursor/hooks.json` (below) | verified live as a plugin (`cursor-agent --plugin-dir <skill-dir>`: `${CURSOR_PLUGIN_ROOT}` expanded, a `killall` was rejected, the next command ran) and as a project hook |
 | Codex | the same script on `PreToolUse` | add to `~/.codex/hooks.json` or `<repo>/.codex/hooks.json` (below), then trust it in `/hooks`: Codex skips an untrusted hook | contract tested offline; untested in Codex |
 | OpenCode | `hooks/opencode-kill-guard.js` (`tool.execute.before`) | symlink it into `.opencode/plugins/` or `~/.config/opencode/plugins/` | plugin tested with node; untested in OpenCode |
 
