@@ -24,8 +24,8 @@ again before it starts, so the list always matches what runs:
   plugin  every case directory under work/evaluation/plugin/evals/, after a zero-cost load check
           (`claude plugin eval . --max-cost-usd 0`) that fails on any case file plugin eval cannot
           load — it would skip that case and the artifact would miss it
-  manual  the gate gold standards from the split: `test` when it lists any, else every entry of
-          `all_cases`, `training` and `validation`; run-case.sh gets each entry as its <case>
+  manual  the gate gold standards from the split: `test` with 10 or more gold standards, every gold
+          standard with 3-9 (a `test` split there is an error); run-case.sh gets each entry as its <case>
 
     gate.py record [--workspace DIR] [--skill NAME]     # exit 0 recorded, 3 precondition missing
 
@@ -239,8 +239,7 @@ def record_cases(ws: Path, skill: str) -> tuple[list[str], str, int | str, bool]
         if not cases:
             raise GateError(f"{DATA_SPLIT} lists no gold standards (all_cases, training, validation or test; "
                             "4.2); the manual protocol runs one gate case per gold standard")
-        omitted = omitted_gold(ws, [c for key in ("all_cases", "training", "validation", "test")
-                                    for c in split.gold.get(key, [])])
+        omitted = omitted_gold(ws, split.all_gold())
         if omitted:
             raise GateError(f"{DATA_SPLIT} leaves out gold standards found on disk: {', '.join(omitted)}; list each "
                             "under all_cases, training, validation or test (4.2), or move a file that is not a "

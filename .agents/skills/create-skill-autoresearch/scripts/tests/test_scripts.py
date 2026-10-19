@@ -745,12 +745,25 @@ class RecordTest(TempWorkspace):
         self.assertEqual(out.returncode, 3)
         self.assertIn("nested eval cases ['group/inner']", out.stderr)
 
-    def test_manual_record_prefers_the_test_split(self) -> None:
+    def test_manual_record_gates_the_test_split_from_ten_gold_standards(self) -> None:
+        self.make_build(["gold-01"], invoked=False)
+        path = self.ws / "work" / "evaluation" / "data-split.yaml"
+        gold = [f"input/g{i:02d}.md" for i in range(10)]
+        path.write_text(f"training: [{', '.join(gold[:7])}]\nvalidation: [{', '.join(gold[7:9])}]\ntest: [{gold[9]}]\n")
+        self.assertEqual(self.run_script("gate.py", "record").returncode, 0)
+        self.assertEqual(self.split().plugin_eval, ["input/g09.md"])
+        path.write_text(f"training: [{', '.join(gold)}]\ntest: []\n")
+        out = self.run_script("gate.py", "record")
+        self.assertEqual(out.returncode, 3)
+        self.assertIn("10 gold standards and no test split", out.stderr)
+
+    def test_manual_record_gates_every_gold_standard_below_ten(self) -> None:
         self.make_build(["gold-01"], invoked=False)
         path = self.ws / "work" / "evaluation" / "data-split.yaml"
         path.write_text("training: [input/a.md, input/b.md]\nvalidation: [input/c.md]\ntest: [input/d.md]\n")
-        self.assertEqual(self.run_script("gate.py", "record").returncode, 0)
-        self.assertEqual(self.split().plugin_eval, ["input/d.md"])
+        out = self.run_script("gate.py", "record")
+        self.assertEqual(out.returncode, 3, "4 gold standards have no test split (SKILL.md 4.2)")
+        self.assertIn("4 gold standards and a test split of 1", out.stderr)
         path.write_text("all_cases: [input/a.md, input/b.md]\ntraining: [input/b.md, input/c.md]\ntest: []\n")
         self.assertEqual(self.run_script("gate.py", "record").returncode, 0)
         self.assertEqual(self.split().plugin_eval, ["input/a.md", "input/b.md", "input/c.md"],

@@ -54,9 +54,12 @@ _NOT_INPUTS = {p.as_posix() for p in (PLUGIN_ARTIFACT, MANUAL_ARTIFACT, GATE_REC
 _GENERATED_DIRS = tuple(f"{d.as_posix()}/" for d in (PLUGIN_DIR / "skills", PLUGIN_DIR / "evals" / "results"))
 
 GOLD_KEYS = ("all_cases", "training", "validation", "test")
+# SKILL.md 4.2: from this many gold standards the split holds out a test set; below it, leave-one-out.
+TEST_SPLIT_MIN = 10
 _GATE_KEYS = ("plugin_eval", "plugin_eval_available")
 _TOP_KEY = re.compile(r"^([A-Za-z_][\w-]*):(.*)$")
 _INT = re.compile(r"^-?\d+$")
+SKILL_NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 
 
 class GateError(Exception):
@@ -72,15 +75,25 @@ class DataSplit:
     gold: dict[str, list[str]] = field(default_factory=dict)
     gold_error: str | None = None
 
-    def gate_gold(self) -> list[str]:
-        """The gold standards the gate runs (SKILL.md 3.6): the test split when it lists any (10 or more
-        gold standards), otherwise every gold standard across all_cases, training and validation."""
-        if self.gold.get("test"):
-            return list(self.gold["test"])
+    def all_gold(self) -> list[str]:
+        """Every gold standard the split names, once, in key order."""
         seen: dict[str, None] = {}
-        for key in ("all_cases", "training", "validation"):
+        for key in GOLD_KEYS:
             seen.update(dict.fromkeys(self.gold.get(key, [])))
         return list(seen)
+
+    def gate_gold(self) -> list[str]:
+        """The gold standards the gate runs (SKILL.md 3.6, 4.2): the test split with 10 or more gold
+        standards, every gold standard with 3-9. Raises GateError on a split that breaks that rule."""
+        total, test = len(self.all_gold()), self.gold.get("test", [])
+        if total >= TEST_SPLIT_MIN and not test:
+            raise GateError(f"{total} gold standards and no test split; with {TEST_SPLIT_MIN} or more, 4.2 holds "
+                            "out 10% under `test` and the gate runs those")
+        if total < TEST_SPLIT_MIN and test:
+            raise GateError(f"{total} gold standards and a test split of {len(test)}; with fewer than "
+                            f"{TEST_SPLIT_MIN}, 4.2 has no test split and the gate runs every gold standard: "
+                            "list the `test` entries under all_cases or training instead")
+        return list(test) if test else self.all_gold()
 
 
 def _strip_comment(line: str) -> str:
