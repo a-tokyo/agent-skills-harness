@@ -9,6 +9,7 @@ build's executor, and every workspace is a temp dir. No network, no credentials.
 from __future__ import annotations
 
 import json
+import locale
 import os
 import signal
 import subprocess
@@ -658,7 +659,7 @@ class GatePluginTest(TempWorkspace):
         out = self.run_script("gate.py", "--model", "m")
         self.assertEqual(out.returncode, 3)
         self.assertIn("1 case file(s) fail to load", out.stdout)
-        self.assertIn("gold-02/case.yaml: invalid case.yaml", out.stdout)
+        self.assertIn(f"{Path('gold-02', 'case.yaml')}: invalid case.yaml", out.stdout)
         self.assertNotIn("--ablation\", \"with-without", self.argv_log.read_text(), "the eval never ran")
 
 
@@ -702,7 +703,7 @@ class RecordTest(TempWorkspace):
         out = self.run_script("gate.py", "record")
         self.assertEqual(out.returncode, 3)
         self.assertIn("2 case file(s) fail to load", out.stderr)
-        self.assertIn("trigger-1/case.yaml", out.stderr)
+        self.assertIn(str(Path("trigger-1", "case.yaml")), out.stderr)
 
     def test_record_refuses_a_case_named_unlike_its_directory(self) -> None:
         self.make_build(["gold-01"])
@@ -1132,6 +1133,13 @@ class FinishTest(TempWorkspace):
         self.assertIn("UNSHIPPED needs a gate attempt", data["reason"])
         self.assertEqual(self.run_script("gate.py", "record").returncode, 0)
         self.assertIn("needs a gate attempt", self.finish()["reason"], "a record alone is not a gate attempt")
+
+    @unittest.skipUnless(WINDOWS, "the fallback is the locale's code page, which is UTF-8 here")
+    def test_benchmark_in_the_windows_code_page_is_read(self) -> None:
+        self.make_build(["gold-01"])
+        encoding = locale.getpreferredencoding(False)
+        (self.ws / "BENCHMARK.md").write_bytes("**Verdict \u2014 ITERATE**\n".encode(encoding))
+        self.assertEqual(self.finish()["verdict"], "ITERATE", "the code page's em dash still separates the label")
 
     def test_unshipped_finishes_after_a_gate_that_failed_to_start(self) -> None:
         self.make_build(["gold-01"])
