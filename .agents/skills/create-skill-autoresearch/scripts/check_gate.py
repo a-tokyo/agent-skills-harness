@@ -27,8 +27,8 @@ only, then every Skill indicator, whatever its case's class: how often the skill
 
 --finish checks the build's end state instead (SKILL.md 5.1): BENCHMARK.md at the build root has a
 `Verdict: <label>` line naming SHIP, SHIP WITH CAVEATS or UNSHIPPED, no `gate` job is running, a
-SHIP or SHIP WITH CAVEATS verdict stands on a gate that validates now and whose `GATE VALID:` line
-BENCHMARK.md carries, and an UNSHIPPED verdict follows a gate attempt: gate.py logged a record or gate
+SHIP or SHIP WITH CAVEATS verdict stands on a gate that validates now and whose current `GATE VALID:` line
+BENCHMARK.md carries (whitespace aside), and an UNSHIPPED verdict follows a gate attempt: gate.py logged a record or gate
 step in work/evaluation/gate-attempts.jsonl, and a gate run started (gate.json) or a logged error stopped it. It prints `BUILD FINISHED: verdict <label>` or `BUILD UNFINISHED: <reason>`.
 
     check_gate.py [--workspace DIR] [--skill NAME] [--min-runs N] [--json] [--finish]
@@ -278,6 +278,10 @@ def validate(workspace: Path, skill: str | None = None, min_runs: int = REQUIRED
     )
 
 
+def _spaced(text: str) -> str:
+    return " ".join(text.split())
+
+
 def _gate_attempted(workspace: Path) -> bool:
     """gate.py logged a record or gate step, and either a gate run started (gate.json) or a logged
     GateError stopped it."""
@@ -288,7 +292,7 @@ def _gate_attempted(workspace: Path) -> bool:
 def finish(workspace: Path, skill: str | None = None, min_runs: int = REQUIRED_RUNS) -> tuple[bool, str | None, str]:
     """(finished, verdict, reason) for the build's end state: BENCHMARK.md at the build root states a
     terminal verdict on a `Verdict: <label>` line, no `gate` job is live, and a SHIP or SHIP WITH CAVEATS
-    verdict stands on a gate that still validates, whose GATE VALID line BENCHMARK.md carries."""
+    verdict stands on a gate that still validates, whose current GATE VALID line BENCHMARK.md carries."""
     bench = workspace / BENCHMARK
     if not bench.is_file():
         return False, None, f"no {BENCHMARK} at the build root; carry Phase 5 through 5.4 to a terminal verdict"
@@ -313,8 +317,9 @@ def finish(workspace: Path, skill: str | None = None, min_runs: int = REQUIRED_R
         gate = validate(workspace, skill, min_runs)
         if not gate.valid:
             return False, verdict, f"{verdict} needs a valid gate: {gate.line()}; return to 5.0"
-        if "GATE VALID:" not in text:
-            return False, verdict, f"{BENCHMARK} lacks check_gate.py's GATE VALID line beside the {verdict} verdict"
+        if _spaced(gate.line()) not in _spaced(text):
+            return False, verdict, (f"{BENCHMARK} lacks check_gate.py's current GATE VALID line beside the {verdict} "
+                                    f"verdict; copy it in verbatim: {gate.line()}")
     return True, verdict, "ok"
 
 
