@@ -59,7 +59,7 @@ is the guard where none of these is installed.
 | Host | Ships as | Install | Status |
 |---|---|---|---|
 | Claude Code | `hooks/hooks.json` (`PreToolUse`, `Bash`) | plugin install, or `claude --plugin-dir <skill-dir>` | verified (plugin load, smoke run) |
-| Cursor | `.cursor-plugin/plugin.json` → `hooks/cursor-hooks.json` (`beforeShellExecution`) | plugin install; or for an `npx skills` install add the hook to `.cursor/hooks.json` (below) | contract tested offline; live hook run unverified |
+| Cursor | `.cursor-plugin/plugin.json` → `hooks/cursor-hooks.json` (`beforeShellExecution`) | plugin install; or for an `npx skills` install add the hook to `.cursor/hooks.json` (below) | contract tested offline; verified live as a project hook under `cursor-agent` (blocked a `pkill`, allowed the next command); the plugin install path is untested |
 | Codex | the same script on `PreToolUse` | add to `~/.codex/hooks.json` or `<repo>/.codex/hooks.json` (below); Codex asks you to trust hooks | contract tested offline; untested in Codex |
 | OpenCode | `hooks/opencode-kill-guard.js` (`tool.execute.before`) | symlink it into `.opencode/plugins/` or `~/.config/opencode/plugins/` | plugin tested with node; untested in OpenCode |
 
