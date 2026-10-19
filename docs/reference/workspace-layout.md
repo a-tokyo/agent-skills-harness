@@ -36,6 +36,8 @@ builds/<skill-name>/
                                   #   skills/<name>/ (copy of output, refreshed by gate.py), evals/<case>/
       gate.json                   # Phase 5.0 gate record: mode (plugin | manual), probe exit code, cases,
                                   #   sha256 of output/<name>/ and of the case set, started/finished
+      gate-attempts.jsonl         # one line per gate.py record / gate run and the error that stopped it;
+                                  #   check_gate.py --finish needs one before an UNSHIPPED verdict counts
       plugin-eval.json            # Phase 5.0 with/without result (WITH, W/OUT, delta per case)
       uplift.json                 # Phase 5.0 manual with/without result, when plugin eval is unavailable
                                   #   or the skill is user-invoked (replaces plugin-eval.json)
@@ -152,7 +154,7 @@ Subdirectories:
   <name>` writes `<name>.stop` and the supervisor stops only its own child group, so a build never stops
   another build's processes and nothing needs `ps`. Transient; `run_owned.py` writes a `.gitignore` of
   `*` here.
-- `experiments/` — all experimentation artifacts: `DESIGN.md` (structural decisions locked before the first draft), `craft-decisions.md` (per-iteration ledger), the autoresearch session files, and `run.log`.
+- `experiments/` — all experimentation artifacts: `DESIGN.md` (structural decisions locked before the first draft), `craft-decisions.md` (per-iteration ledger), `premortem.md` (the 5.1 risk list the panel tests), the autoresearch session files, and `run.log`.
 - `handoffs/` — cross-session continuity (`state.yaml` for automatic resume, `HANDOFF-*.md` for rich human-readable context).
 
 ### output/ — what you get

@@ -75,6 +75,15 @@ PY
     echo "check-parity: version MISMATCH — the marketplace entry says $entry_version, the frontmatter $src_version; bump them together." >&2
     status=1
   fi
+  # The Cursor plugin manifest the skill ships carries its own version; it must agree too.
+  if [ -f "$SRC/.cursor-plugin/plugin.json" ]; then
+    cursor_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("version",""))' "$SRC/.cursor-plugin/plugin.json")"
+    echo "check-parity: cursor plugin version     = ${cursor_version:-<none>}"
+    if [ "$cursor_version" != "$src_version" ]; then
+      echo "check-parity: version MISMATCH — .cursor-plugin/plugin.json says $cursor_version, the frontmatter $src_version; bump them together." >&2
+      status=1
+    fi
+  fi
   # A marketplace entry with source "./" roots the plugin at the repo, so the skill's own
   # hooks/hooks.json never loads there: each entry that installs the factory repeats its hooks
   # inline, re-rooted at skills/create-skill-autoresearch/.
