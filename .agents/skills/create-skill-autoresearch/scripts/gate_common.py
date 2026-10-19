@@ -259,16 +259,26 @@ def utf8_stdio() -> None:
             stream.reconfigure(encoding="utf-8", errors="replace")
 
 
+def check_skill_name(skill: object) -> str:
+    """The SKILL.md 3.3 `name` rule, so a skill name can never be a path: a gate deletes and rewrites
+    work/evaluation/plugin/skills/<name>/."""
+    if not isinstance(skill, str) or len(skill) > 64 or not SKILL_NAME.fullmatch(skill):
+        raise GateError(f"skill name {skill!r} is not a skill name (lowercase letters, digits and single hyphens, "
+                        "<= 64 chars; a name under output/, never a path)")
+    return skill
+
+
 def resolve_skill(workspace: Path, skill: str | None) -> str:
     output = workspace / "output"
-    if skill:
+    if skill is not None:
+        check_skill_name(skill)
         if not (output / skill / "SKILL.md").is_file():
             raise GateError(f"no skill at {output / skill / 'SKILL.md'}")
         return skill
     found = sorted(p.parent.name for p in output.glob("*/SKILL.md")) if output.is_dir() else []
     if len(found) != 1:
         raise GateError(f"found {len(found)} skills under {output}; pass --skill <name>")
-    return found[0]
+    return check_skill_name(found[0])
 
 
 def model_invoked(skill_md: Path) -> bool:

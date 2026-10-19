@@ -674,6 +674,37 @@ class GatePluginTest(TempWorkspace):
         self.assertEqual(recorded, ["extra", "gold-01", "gold-02", "near-miss", "trigger-1"])
         self.assertEqual(json.loads(self.run_script("check_gate.py", "--json").stdout)["cases"], 5)
 
+    def victim(self, name: str = "victim") -> Path:
+        """A SKILL-shaped directory in the temp root, outside the workspace: what --skill must never reach."""
+        victim = self.root / "elsewhere" / name
+        victim.mkdir(parents=True)
+        (victim / "SKILL.md").write_text("---\nname: victim\ndescription: Not the build's.\n---\n")
+        return victim
+
+    def test_skill_that_is_a_path_is_refused_and_nothing_outside_is_touched(self) -> None:
+        self.make_build(self.CASES)
+        victim = self.victim()
+        for skill in (str(victim), "../../elsewhere/victim", f"..{os.sep}victim", "demo/../demo", "demo/x", "Demo", ""):
+            with self.subTest(skill=skill):
+                for script, args in (("gate.py", ["--model", "m"]), ("gate.py", ["record"]), ("check_gate.py", [])):
+                    out = self.run_script(script, *args, "--skill", skill)
+                    self.assertNotEqual(out.returncode, 0, out.stdout + out.stderr)
+                    self.assertIn("is not a skill name", out.stdout + out.stderr)
+                self.assertTrue((victim / "SKILL.md").is_file())
+        self.assertFalse(self.argv_log.exists() and "with-without" in self.argv_log.read_text(), "no eval ran")
+
+    def test_symlinked_skill_copy_is_refused_before_anything_is_deleted(self) -> None:
+        self.make_build(self.CASES)
+        victim = self.victim("demo")
+        try:
+            (self.ws / "work" / "evaluation" / "plugin" / "skills").symlink_to(victim.parent, target_is_directory=True)
+        except OSError as exc:
+            self.skipTest(f"no symlinks here: {exc}")
+        out = self.run_script("gate.py", "--model", "m")
+        self.assertEqual(out.returncode, 3, out.stdout + out.stderr)
+        self.assertIn("refuses a symlink", out.stdout)
+        self.assertTrue((victim / "SKILL.md").is_file())
+
     def test_unloadable_case_stops_the_gate_before_it_runs(self) -> None:
         self.make_build(self.CASES)
         (self.ws / "work" / "evaluation" / "plugin" / "evals" / "gold-02" / "INVALID").write_text("")
@@ -1209,6 +1240,15 @@ class FinishTest(TempWorkspace):
         data = self.finish()
         self.assertFalse(data["finished"])
         self.assertIn("skill changed since the gate", data["reason"])
+
+    def test_one_run_gate_never_finishes_a_ship(self) -> None:
+        self.make_build(["gold-01"])
+        self.assertEqual(self.run_script("gate.py", "--model", "m", "--runs", "1").returncode, 1)
+        self.assertIn("1 completed runs; 3 required", self.gate_line())
+        self.benchmark("Verdict: SHIP\n\nGATE VALID: mode=plugin artifact=work/evaluation/plugin-eval.json cases=1\n")
+        self.assertIn("SHIP needs a valid gate", self.finish()["reason"])
+        for args in (["--min-runs", "1"], ["--finish", "--min-runs", "1"]):
+            self.assertEqual(self.run_script("check_gate.py", *args).returncode, 2, "no flag lowers the 3 runs")
 
     def test_live_gate_is_unfinished(self) -> None:
         self.make_build(["gold-01"])

@@ -80,7 +80,8 @@ import check_gate  # noqa: E402  (sibling imports after disabling bytecode)
 import run_owned  # noqa: E402
 from gate_common import (  # noqa: E402
     DATA_SPLIT, GATE_RECORD, MANUAL_ARTIFACT, PLUGIN_ARTIFACT, PLUGIN_DIR, REQUIRED_RUNS, RUN_CASE,
-    GateError, cases_sha256, file_sha256, inputs_sha256, model_invoked, omitted_gold, read_data_split, resolve_skill,
+    GateError, cases_sha256, check_skill_name, file_sha256, inputs_sha256, model_invoked, omitted_gold,
+    read_data_split, resolve_skill,
     log_attempt, skill_sha256, utf8_stdio, write_gate_cases, write_json,
 )
 
@@ -328,9 +329,19 @@ def preconditions(ws: Path, args: argparse.Namespace) -> tuple[str, list[str], s
     return skill, cases, mode, available, invoked
 
 
+def _skill_copy(ws: Path, skill: str) -> Path:
+    """work/evaluation/plugin/skills/<skill>, refused when it would resolve anywhere else (a symlinked
+    plugin/, skills/ or copy) since the gate deletes it before each run."""
+    copy = ws.resolve() / PLUGIN_DIR / "skills" / check_skill_name(skill)
+    if os.path.normcase(copy.resolve()) != os.path.normcase(copy):
+        raise GateError(f"{copy} resolves to {copy.resolve()}, outside {PLUGIN_DIR / 'skills'}; the gate deletes and "
+                        "rewrites that copy, so it refuses a symlink anywhere on the path")
+    return copy
+
+
 def run_plugin(ws: Path, skill: str, args: argparse.Namespace) -> None:
     plugin = ws / PLUGIN_DIR
-    copy = plugin / "skills" / skill
+    copy = _skill_copy(ws, skill)
     if copy.exists():
         shutil.rmtree(copy)
     shutil.copytree(ws / "output" / skill, copy)
@@ -480,7 +491,7 @@ def run_gate(ws: Path, args: argparse.Namespace) -> int:
     record |= {"run_case_sha256": file_sha256(ws / RUN_CASE), "inputs_sha256": inputs_sha256(ws),
                "artifact_sha256": file_sha256(ws / artifact), "finished": _now()}
     write_json(ws / GATE_RECORD, record)
-    verdict = check_gate.validate(ws, skill, REQUIRED_RUNS)
+    verdict = check_gate.validate(ws, skill)
     print(verdict.line())
     return 0 if verdict.valid else EXIT_INVALID
 
@@ -508,7 +519,7 @@ def _job_argv(ws: Path, args: argparse.Namespace) -> list[str]:
     argv = [sys.executable, "-B", str(SCRIPTS / "gate.py"), "--workspace", str(ws), "--model", args.model,
             "--runs", str(args.runs), "--jobs", str(args.jobs), "--allow-tools", *args.allow_tools,
             "--timeout", f"{args.timeout:g}", "--case-timeout", f"{args.case_timeout:g}"]
-    if args.skill:
+    if args.skill is not None:
         argv += ["--skill", args.skill]
     if args.in_sample:
         argv.append("--in-sample")

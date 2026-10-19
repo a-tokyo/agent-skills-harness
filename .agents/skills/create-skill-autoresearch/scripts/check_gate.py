@@ -6,7 +6,7 @@ output/<skill>/, the recorded cases, run-case.sh, the scorer and fixture files u
 work/evaluation/ (gate_common.inputs_sha256) and the artifact itself — any edit after the gate is
 "gate inputs changed since the gate; re-run 5.0" — and the canonical artifact for its mode exists
 at its path, covers exactly the gate cases recorded under `plugin_eval` in
-work/evaluation/data-split.yaml, has at least --min-runs completed runs per arm per case, and
+work/evaluation/data-split.yaml, has at least 3 completed runs per arm per case (criterion 7; no flag lowers it), and
 records `"partial": false`:
 
     plugin mode   work/evaluation/plugin-eval.json   (written by claude plugin eval)
@@ -31,7 +31,7 @@ SHIP or SHIP WITH CAVEATS verdict stands on a gate that validates now and whose 
 BENCHMARK.md carries (whitespace aside), and an UNSHIPPED verdict follows a gate attempt: gate.py logged a record or gate
 step in work/evaluation/gate-attempts.jsonl, and a gate run started (gate.json) or a logged error stopped it. It prints `BUILD FINISHED: verdict <label>` or `BUILD UNFINISHED: <reason>`.
 
-    check_gate.py [--workspace DIR] [--skill NAME] [--min-runs N] [--json] [--finish]
+    check_gate.py [--workspace DIR] [--skill NAME] [--json] [--finish]
 
 Tested on macOS, Linux and Windows. Exit codes: 0 valid (--finish: finished), 1 invalid (unfinished), 2 usage error.
 """
@@ -50,7 +50,7 @@ sys.dont_write_bytecode = True
 import run_owned  # noqa: E402  (sibling imports after disabling bytecode)
 from gate_common import (  # noqa: E402
     DATA_SPLIT, GATE_ATTEMPTS, GATE_RECORD, MANUAL_ARTIFACT, PLUGIN_ARTIFACT, REQUIRED_RUNS, RUN_CASE, GateError,
-    cases_sha256, file_sha256, inputs_sha256, read_attempts, read_data_split, skill_sha256, utf8_stdio,
+    cases_sha256, check_skill_name, file_sha256, inputs_sha256, read_attempts, read_data_split, skill_sha256, utf8_stdio,
 )
 
 BENCHMARK = Path("BENCHMARK.md")
@@ -123,9 +123,13 @@ def _gate_record(workspace: Path, skill: str | None, recorded: list[str]) -> dic
     if not record.get("skill_sha256") or not record.get("cases_sha256"):
         raise Invalid("gate_unhashed", f"{GATE_RECORD} has no skill or case hash (an older gate.py); re-run 5.0")
     name = record.get("skill")
-    if skill and name != skill:
+    if skill is not None and name != skill:
         raise Invalid("bad_gate_record", f"{GATE_RECORD} gated skill {name!r}, not {skill!r}; re-run 5.0")
-    if not isinstance(name, str) or not (workspace / "output" / name / "SKILL.md").is_file():
+    try:
+        check_skill_name(name)
+    except GateError as exc:
+        raise Invalid("bad_gate_record", f"{GATE_RECORD}: {exc}") from exc
+    if not (workspace / "output" / name / "SKILL.md").is_file():
         raise Invalid("bad_gate_record", f"{GATE_RECORD} names skill {name!r}, which is not under output/")
     if skill_sha256(workspace, name) != record["skill_sha256"]:
         raise Invalid("stale_skill", f"skill changed since the gate; re-run 5.0 (output/{name}/ no longer "
@@ -235,9 +239,14 @@ def _manual(data: dict, recorded: list[str], min_runs: int) -> list[CaseResult]:
     return results
 
 
-def validate(workspace: Path, skill: str | None = None, min_runs: int = REQUIRED_RUNS) -> Verdict:
+def validate(workspace: Path, skill: str | None = None) -> Verdict:
     mode = rel = None
     try:
+        try:
+            if skill is not None:
+                check_skill_name(skill)
+        except GateError as exc:
+            raise Invalid("bad_skill", str(exc)) from exc
         try:
             split = read_data_split(workspace / DATA_SPLIT)
         except GateError as exc:
@@ -261,7 +270,7 @@ def validate(workspace: Path, skill: str | None = None, min_runs: int = REQUIRED
             raise Invalid("bad_artifact", f"{rel} is not valid JSON: {exc}") from exc
         if not isinstance(data, dict):
             raise Invalid("bad_artifact", f"{rel} is not a JSON object")
-        results = (_plugin if mode == "plugin" else _manual)(data, split.plugin_eval, min_runs)
+        results = (_plugin if mode == "plugin" else _manual)(data, split.plugin_eval, REQUIRED_RUNS)
         if split.gold_recorded and not any(r.kind == "gold" for r in results):
             raise Invalid("no_gold", f"{DATA_SPLIT} records gold standards but no gate case is a gold case "
                                      "(every case grades only `tool_used` on Skill); 3.6 adds one per gate "
@@ -299,7 +308,7 @@ def _gate_attempted(workspace: Path) -> bool:
     return bool(attempts) and ((workspace / GATE_RECORD).is_file() or any(a.get("error") for a in attempts))
 
 
-def finish(workspace: Path, skill: str | None = None, min_runs: int = REQUIRED_RUNS) -> tuple[bool, str | None, str]:
+def finish(workspace: Path, skill: str | None = None) -> tuple[bool, str | None, str]:
     """(finished, verdict, reason) for the build's end state: BENCHMARK.md at the build root states a
     terminal verdict on a `Verdict: <label>` line, no `gate` job is live, and a SHIP or SHIP WITH CAVEATS
     verdict stands on a gate that still validates, whose current GATE VALID line BENCHMARK.md carries."""
@@ -324,7 +333,7 @@ def finish(workspace: Path, skill: str | None = None, min_runs: int = REQUIRED_R
         return False, verdict, ("UNSHIPPED needs a gate attempt: no gate.py record or gate run is logged in "
                                 f"{GATE_ATTEMPTS}; run 3.6 and 5.0 (a build that does not ship still runs the gate)")
     if verdict != "UNSHIPPED":
-        gate = validate(workspace, skill, min_runs)
+        gate = validate(workspace, skill)
         if not gate.valid:
             return False, verdict, f"{verdict} needs a valid gate: {gate.line()}; return to 5.0"
         if _spaced(gate.line()) not in _spaced(text):
@@ -338,20 +347,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--workspace", type=Path, default=Path("."), help="build workspace root (default: .)")
     parser.add_argument("--skill", help="skill name under output/ (default: the one gate.json records)")
-    parser.add_argument("--min-runs", type=int, default=REQUIRED_RUNS,
-                        help=f"completed runs required per arm per case (default {REQUIRED_RUNS})")
     parser.add_argument("--json", action="store_true", help="print the verdict as JSON instead of a line")
     parser.add_argument("--finish", action="store_true",
                         help="check the build's end state (BENCHMARK.md verdict, no live gate) instead of the gate")
     args = parser.parse_args(argv)
-    if args.min_runs < 1:
-        parser.error("--min-runs must be at least 1")
     if args.finish:
-        done, label, reason = finish(args.workspace.resolve(), args.skill, args.min_runs)
+        done, label, reason = finish(args.workspace.resolve(), args.skill)
         line = f"BUILD FINISHED: verdict {label}" if done else f"BUILD UNFINISHED: {reason}"
         print(json.dumps({"finished": done, "verdict": label, "reason": reason}) if args.json else line)
         return 0 if done else 1
-    verdict = validate(args.workspace.resolve(), args.skill, args.min_runs)
+    verdict = validate(args.workspace.resolve(), args.skill)
     print(json.dumps(asdict(verdict)) if args.json else verdict.line())
     return 0 if verdict.valid else 1
 
