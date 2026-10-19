@@ -187,12 +187,15 @@ input as the user message, then compare the LLM's output to the gold standard re
 
 set -euo pipefail
 
-# No argument: score each training case, then emit the mean as the primary metric
+# No argument: score each training case, then emit the mean of every METRIC over the cases
+# (each dimension, then overall_score, the primary metric)
 if [ $# -eq 0 ]; then
   awk '/^training:/{f=1;next} /^[^ #]/{f=0} f && /^ *- /{gsub(/^ *- *"?|"? *(#.*)?$/,""); print}' \
     work/evaluation/data-split.yaml \
-  | while read -r case_path; do "$0" "$case_path" | grep '^METRIC overall_score='; done \
-  | awk -F= '{s+=$2; n++} END {if (!n) exit 1; printf "METRIC overall_score=%.4f\n", s/n}'
+  | while read -r case_path; do "$0" "$case_path" | grep '^METRIC '; done \
+  | awk -F'[ =]' '{s[$2]+=$3; n[$2]++} END {if (!n["overall_score"]) exit 1
+      for (k in s) if (k != "overall_score") printf "METRIC %s=%.4f\n", k, s[k]/n[k]
+      printf "METRIC overall_score=%.4f\n", s["overall_score"]/n["overall_score"]}'
   exit
 fi
 

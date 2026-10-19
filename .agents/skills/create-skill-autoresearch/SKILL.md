@@ -248,7 +248,7 @@ live there during the session and are archived to `work/experiments/` when it en
   (regex `^METRIC overall_score=([0-9.]+)$`); the other `METRIC` lines are per-dimension context
 - **Direction**: `higher_is_better`
 - **In-scope files**: `output/<skill-name>/SKILL.md`, `output/<skill-name>/references/*`, `output/<skill-name>/scripts/*`
-- **Out-of-scope files**: `input/`, `work/`
+- **Out-of-scope files**: `input/`, `work/` for experiment edits; the LOG step still writes the factory's records below and the 4.2 rotation
 - **Constraints**: the hard constraints in 3.3; if `work/evaluation/evaluate-checks.sh` exists, it
   must exit 0 **before** measuring — a failing check is a discard, not a measurement
 - **Budget**: From rubric config `max_iterations` (default 20)
