@@ -168,6 +168,12 @@ class KillGuardTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertIn("taskkill /PID <pid>", self.assert_exit(command, 2).stderr)
 
+    def test_powershell_tool_calls_are_checked(self) -> None:
+        event = bash("Stop-Process -Name node") | {"tool_name": "PowerShell"}
+        self.assertEqual(run_hook(event).returncode, 2)
+        event["tool_input"]["command"] = "Stop-Process -Id 4242"
+        self.assertEqual(run_hook(event).returncode, 0)
+
     def test_other_tools_and_unreadable_input_pass(self) -> None:
         self.assertEqual(run_hook({"tool_name": "Write", "tool_input": {"content": "pkill -f x"}}).returncode, 0)
         self.assertEqual(run_hook({"tool_name": "Bash", "tool_input": {}}).returncode, 0)
@@ -316,7 +322,7 @@ class HooksJsonTest(unittest.TestCase):
     def test_bash_pretooluse_hook_runs_the_guard_from_the_plugin_root(self) -> None:
         config = json.loads((SKILL / "hooks" / "hooks.json").read_text())
         [entry] = config["hooks"]["PreToolUse"]
-        self.assertEqual(entry["matcher"], "Bash")
+        self.assertEqual(entry["matcher"], "Bash|PowerShell", "Claude Code on Windows runs shell commands as PowerShell")
         [hook] = entry["hooks"]
         self.assertEqual(hook["type"], "command")
         self.assertEqual(hook["command"], 'sh "${CLAUDE_PLUGIN_ROOT}/hooks/kill-guard"',
