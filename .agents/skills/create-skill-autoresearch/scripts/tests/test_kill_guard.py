@@ -37,6 +37,12 @@ ALLOWED = [
     "ls skills/ && cat SKILL.md",
     "git log --oneline -5",
     "npm test 2>&1 | tail -5",
+    'kill %1 && find . -name "*.log"',
+    "docker ps | grep x; kill 123",
+    "ps aux | grep gate\nkill 4242",
+    "pid=$(cat work/pids/gate.pid); kill $pid",
+    "kill 4242 &\nps -p 4242",
+    "echo a & echo b",
 ]
 
 WINDOWS_ALLOWED = [
@@ -70,6 +76,9 @@ WINDOWS_BLOCKED = [
     "pkill.exe -f gate",
     "Stop-Pro`cess -Name node",
     "t^askkill /im node.exe",
+    "Get-Process node | kill",
+    "$p = Get-Process claude; $p.Kill()",
+    "kill (Get-Process node).Id",
 ]
 
 BLOCKED = [
@@ -90,6 +99,13 @@ BLOCKED = [
     "kill `pgrep -f gate`",
     "for p in $(pgrep -f run-case); do kill $p; done",
     "bash -c 'pkill -f gate'",
+    "kill $(command pgrep -f gate.py)",
+    "kill $(sudo pgrep -f gate.py)",
+    "kill $(env LC_ALL=C pgrep -f gate.py)",
+    "exec kill $(builtin command pgrep x)",
+    "xargs kill < <(pgrep -f gate)",
+    "while read p; do kill $p; done < <(pgrep -f eval)",
+    "pgrep -f eval | while read p; do kill $p; done",
 ]
 
 QUOTING_AND_WHITESPACE = [
