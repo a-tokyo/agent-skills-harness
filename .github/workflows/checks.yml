@@ -53,6 +53,25 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
         run: python -B -m unittest discover -s .agents/skills/create-skill-autoresearch/scripts/tests -v
 
+  # One manual-protocol gate end to end on native Windows, with a stub executor: record, the detached
+  # gate and its wait, check_gate.py, --panel and --finish. No claude and no network.
+  gate-smoke:
+    name: manual gate smoke (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Run one manual gate with a stub run-case.sh
+        shell: bash
+        env:
+          PYTHON: python
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: bash .github/scripts/gate-smoke.sh
+
   parity:
     name: factory parity with the published copy
     runs-on: ubuntu-latest
