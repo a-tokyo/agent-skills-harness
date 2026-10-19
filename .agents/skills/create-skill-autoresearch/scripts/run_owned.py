@@ -586,7 +586,23 @@ def _target(sdir: Path, name: str, proc: subprocess.Popen | None) -> _Target:
     if leader is None:
         raise OwnedError(f"refusing to signal pgid {rec.pgid}: its supervisor is gone and it cannot confirm pid "
                          f"{rec.pid} is the job it recorded (no start time, `ps` unavailable, or a reused pid)")
+    if leader and not _leads_its_group(rec):
+        raise OwnedError(f"refusing to signal pgid {rec.pgid}: the verified leader, pid {rec.pid}, does not lead "
+                         "that group (the record was edited, or the leader moved groups)")
     return _Target(rec, proc, "signal" if leader else "ended")
+
+
+def _leads_its_group(rec: Record) -> bool:
+    """The fallback signals rec.pgid once pid and start time match, so the group must be the verified
+    leader's own: run_owned makes the leader its group's leader (Windows: pgid is the leader's pid)."""
+    if rec.pgid != rec.pid:
+        return False
+    if WINDOWS:
+        return True
+    try:
+        return os.getpgid(rec.pid) == rec.pgid
+    except OSError:
+        return False
 
 
 def stop_many(sdir: Path, jobs: list[tuple[str, subprocess.Popen | None]], grace: float = 10.0) -> list[str]:

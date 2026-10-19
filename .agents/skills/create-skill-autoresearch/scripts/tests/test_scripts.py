@@ -442,6 +442,27 @@ class RunOwnedTest(TempWorkspace):
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertFalse(_group_alive(job["pgid"]))
 
+    def test_fallback_refuses_a_pgid_its_verified_leader_does_not_lead(self) -> None:
+        stranger = subprocess.Popen(SLEEP, **DETACHED)
+        job = self.start("orphan", *SLEEP)
+        try:
+            if self.record("orphan")["lstart"] is None:
+                self.skipTest("the signal fallback needs `ps` to confirm the leader")
+            supervisor = self.record("orphan")["supervisor"]
+            os.kill(supervisor, signal.SIGTERM if WINDOWS else 9)
+            self.assertTrue(_until(lambda: not _alive(supervisor)))
+            path = self.ws / "work" / "pids" / "orphan.json"
+            path.write_text(json.dumps(self.record("orphan") | {"pgid": stranger.pid}))
+            out = self.run_script("run_owned.py", "stop", "orphan", "--grace", "1")
+            self.assertEqual(out.returncode, 3, out.stdout + out.stderr)
+            self.assertIn(f"pid {job['pid']}, does not lead that group", out.stderr)
+            self.assertIsNone(stranger.poll(), "the group the edited record names is untouched")
+            self.assertTrue(_alive(job["pid"]))
+        finally:
+            run_owned._signal_group(job["pgid"], run_owned.KILL)
+            stranger.kill()
+            stranger.wait()
+
     def test_concurrent_starts_run_the_job_once(self) -> None:
         argv = [*_script("run_owned.py"), "--workspace", str(self.ws), "start", "race", "--", *SLEEP]
         racers = [subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8",
