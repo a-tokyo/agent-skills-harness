@@ -22,6 +22,7 @@ sys.dont_write_bytecode = True
 SCRIPTS = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SCRIPTS))
 import gate_common  # noqa: E402
+import run_owned  # noqa: E402
 
 FAKE_CLAUDE = textwrap.dedent('''\
     #!/usr/bin/env python3
@@ -341,6 +342,55 @@ class RunOwnedTest(TempWorkspace):
         finally:
             sibling.kill()
             sibling.wait()
+
+    def test_start_refuses_to_overwrite_a_live_unverifiable_job(self) -> None:
+        stranger = subprocess.Popen(["sleep", "300"], start_new_session=True)
+        try:
+            self.forge(stranger, lstart=None)
+            before = self.record("forged")
+            out = self.run_script("run_owned.py", "start", "forged", "--", "true")
+            self.assertEqual(out.returncode, 3, out.stderr)
+            self.assertIn("may still be running", out.stderr)
+            self.assertEqual(self.record("forged"), before, "the only record of the live group is kept")
+            self.assertIsNone(stranger.poll())
+        finally:
+            stranger.kill()
+            stranger.wait()
+
+    def test_start_over_a_reused_pid_proceeds(self) -> None:
+        stranger = subprocess.Popen(["sleep", "300"], start_new_session=True)
+        try:
+            self.forge(stranger, lstart="Mon Jan  1 00:00:00 2001")
+            if run_owned._lstart(stranger.pid) is None:
+                self.skipTest("needs `ps` to read the stranger's start time")
+            job = self.start("forged", "sleep", "30")
+            self.assertNotEqual(job["pid"], stranger.pid)
+            self.assertEqual(self.run_script("run_owned.py", "stop", "forged").returncode, 0)
+            self.assertIsNone(stranger.poll(), "the process that reused the pid is untouched")
+        finally:
+            stranger.kill()
+            stranger.wait()
+
+    def test_start_refuses_when_the_supervisor_died_and_ps_is_denied(self) -> None:
+        denied = self.root / "denied-ps"
+        denied.mkdir()
+        (denied / "ps").write_text("#!/bin/sh\necho 'ps: operation not permitted' >&2\nexit 1\n")
+        (denied / "ps").chmod(0o755)
+        no_ps = {"PATH": f"{denied}{os.pathsep}{self.bin}{os.pathsep}{os.environ['PATH']}"}
+        out = self.run_script("run_owned.py", "start", "boxed", "--", "sleep", "300", **no_ps)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        job = json.loads(out.stdout)
+        try:
+            supervisor = self.record("boxed")["supervisor"]
+            os.kill(supervisor, 9)
+            self.assertTrue(_until(lambda: not _alive(supervisor)))
+            self.assertTrue(_group_alive(job["pgid"]), "the job outlives its supervisor")
+            again = self.run_script("run_owned.py", "start", "boxed", "--", "true", **no_ps)
+            self.assertEqual(again.returncode, 3, again.stderr)
+            self.assertIn("may still be running", again.stderr)
+            self.assertEqual(self.record("boxed")["pid"], job["pid"], "the live group stays recorded")
+        finally:
+            os.killpg(job["pgid"], 9)
 
     def test_stop_signals_a_verified_group_whose_supervisor_is_gone(self) -> None:
         job = self.start("orphan", "sleep", "300")

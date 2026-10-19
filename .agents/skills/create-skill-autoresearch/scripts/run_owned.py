@@ -177,15 +177,24 @@ def _signal_group(pgid: int, sig: int) -> None:
         pass
 
 
+def _leader_state(rec: Record) -> str:
+    """`ours` (the recorded leader still runs), `gone`, `reused` (its pid now belongs to a process with
+    another start time) or `unknown` (the pid is alive but the record holds no start time, or `ps`
+    cannot read one)."""
+    if not _pid_alive(rec.pid):
+        return "gone"
+    if rec.lstart is None:
+        return "unknown"
+    now = _lstart(rec.pid)
+    if now is None:
+        return "unknown"
+    return "ours" if now == rec.lstart else "reused"
+
+
 def _leader_is_ours(rec: Record) -> bool | None:
     """True if the recorded leader is still running, False if it is gone, None if its identity
-    cannot be confirmed (its pid now belongs to another process, the record holds no start time,
-    or `ps` cannot read one) and it must not be signalled."""
-    if not _pid_alive(rec.pid):
-        return False
-    if rec.lstart is None:
-        return None
-    return True if _lstart(rec.pid) == rec.lstart else None
+    cannot be confirmed (a reused pid, no start time, or `ps` unavailable) and it must not be signalled."""
+    return {"ours": True, "gone": False}.get(_leader_state(rec))
 
 
 def exit_status(rec: Record) -> int | None:
@@ -225,9 +234,15 @@ def start(sdir: Path, name: str, cmd: list[str], cwd: Path, log: Path | None = N
     try:
         if path.is_file():
             old = load(sdir, name)
-            if old.stopped is None and exit_status(old) is None and _leader_is_ours(old):
+            leader = _leader_state(old) if old.stopped is None and exit_status(old) is None else "gone"
+            if leader == "ours":
                 raise OwnedError(f"job {name!r} is already running (pgid {old.pgid}, supervisor gone); "
                                  "stop it or pick another name")
+            if leader == "unknown":
+                raise OwnedError(f"job {name!r} may still be running: its supervisor is gone and pid {old.pid} is "
+                                 "alive, but no start time confirms it is the job (none recorded, or `ps` cannot "
+                                 f"read one), so starting over its record would lose the group; once pid {old.pid} "
+                                 f"is known not to be the job, delete {path}")
         return _spawn(sdir, name, path, cmd, cwd, log, env, lock_fd)
     finally:
         # Closing never unlocks: the supervisor shares this open file description and keeps it.
