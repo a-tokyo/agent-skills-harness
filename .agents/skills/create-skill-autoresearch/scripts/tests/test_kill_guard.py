@@ -194,6 +194,25 @@ class OpenCodePluginTest(unittest.TestCase):
         self.assertEqual(self.call("bash", "python3 scripts/run_owned.py stop gate"), "allowed")
         self.assertEqual(self.call("read", "pkill -f gate.py"), "allowed", "only bash calls are checked")
 
+    def test_every_export_passes_opencodes_plugin_loader(self) -> None:
+        """OpenCode v1.19 (packages/opencode/src/plugin/index.ts getLegacyPlugins) treats every export
+        of a plugin module as a plugin: a function, or an object with a `server` function, whose call
+        returns the hooks object. Anything else breaks tool dispatch or throws."""
+        script = textwrap.dedent(f"""
+            const mod = await import({json.dumps((SKILL / 'hooks' / 'opencode-kill-guard.js').as_uri())});
+            const verdicts = {{}};
+            for (const [name, value] of Object.entries(mod)) {{
+              const factory = typeof value === "function" ? value : value?.server;
+              if (typeof factory !== "function") {{ verdicts[name] = "not a plugin"; continue; }}
+              const hooks = await factory({{}});
+              verdicts[name] = hooks && typeof hooks === "object" && !Array.isArray(hooks) ? "plugin" : "no hooks";
+            }}
+            console.log(JSON.stringify(verdicts));
+        """)
+        out = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(json.loads(out.stdout), {"KillGuard": "plugin"})
+
 
 class CursorPluginTest(unittest.TestCase):
     def test_manifest_points_at_a_cursor_hooks_file_that_runs_the_guard(self) -> None:

@@ -4,6 +4,7 @@
 // there rather than copying it: it runs ./kill_guard.py beside its real path, so detection lives in one
 // place. Set CSA_KILL_GUARD to the script's path when the symlink is not possible.
 //
+// OpenCode treats every export of a plugin module as a plugin, so this module exports only KillGuard.
 // Before every bash tool call it sends the command to kill_guard.py as a PreToolUse event; exit 2
 // blocks the call by throwing, which OpenCode reports to the agent. If python3 cannot run, the call is
 // let through with a warning: the guard must never stop every shell call.
@@ -14,7 +15,7 @@ import { fileURLToPath } from "node:url";
 
 const GUARD = process.env.CSA_KILL_GUARD || join(dirname(realpathSync(fileURLToPath(import.meta.url))), "kill_guard.py");
 
-export function check(command) {
+function check(command) {
   try {
     execFileSync("python3", [GUARD], {
       input: JSON.stringify({ tool_name: "Bash", tool_input: { command } }),
