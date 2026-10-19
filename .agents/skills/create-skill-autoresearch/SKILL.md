@@ -374,7 +374,7 @@ Read WITH, W/OUT and Δ per case from the artifact; the verdict comes from Δ, t
 
 ### 5.1 Premortem
 
-Run the **premortem skill** on the skill artifact with its present-and-ask step replaced: write the whole risk list to `work/experiments/premortem.md` and pick no mitigation — every risk becomes a 5.2 test scenario, with the five craft failure modes (premature completion, duplication, sediment, sprawl, no-op) as required probes. **5.1 ends by running 5.2's `check_gate.py` command in the same reply**, never by presenting the risks or announcing the panel. Continue in the same turn through 5.4: the build is done only when `python3 <skill-dir>/scripts/check_gate.py --finish` exits 0 — `BENCHMARK.md` at the build root holds a `Verdict: <label>` line (SHIP, SHIP WITH CAVEATS or `UNSHIPPED`), no gate is live, a SHIP label stands on a gate that still validates, and an `UNSHIPPED` one on a gate attempt (3.6 and 5.0 run either way). A non-zero exit names what is left; do it, then re-run.
+Run the **premortem skill** on the skill artifact with its present-and-ask step replaced: write the whole risk list to `work/experiments/premortem.md` and pick no mitigation — every risk becomes a 5.2 test scenario, with the five craft failure modes (premature completion, duplication, sediment, sprawl, no-op) as required probes. **5.1 ends by running 5.2's `check_gate.py` command in the same reply**, never by presenting the risks or announcing the panel. Continue in the same turn through 5.4: the build is done only when `python3 <skill-dir>/scripts/check_gate.py --finish` exits 0 — `BENCHMARK.md` at the build root holds a `Verdict: <label>` line (SHIP, SHIP WITH CAVEATS or `UNSHIPPED`), no gate is live, a SHIP label stands on a gate that still validates and a panel that scored the current skill, and an `UNSHIPPED` one on a gate attempt (3.6 and 5.0 run either way). A non-zero exit names what is left; do it, then re-run.
 
 ### 5.2 Panel Evaluation
 
@@ -382,7 +382,7 @@ First validate the gate artifact from the workspace root; a non-zero exit return
 is never skipped, and the panel never starts on a missing, partial, incomplete or stale artifact:
 
 ```bash
-python3 <skill-dir>/scripts/check_gate.py
+python3 <skill-dir>/scripts/check_gate.py --panel   # also writes work/experiments/panel.json: the skill hash scored
 ```
 
 Then spawn 3 independent verifier subagents **in parallel**. Each receives ONLY the skill SKILL.md and
@@ -430,7 +430,7 @@ dissent logged in `work/experiments/craft-decisions.md`, **deadlock → escalate
 | Any dimension < 3/10 by majority | **BLOCK** -- address blocking concern first |
 
 A 5.0 gate gold-standard case with Δ <= 0 caps the verdict at SHIP WITH CAVEATS until a re-run shows Δ > 0
-or the panel records why that case cannot benefit.
+(`--finish` enforces it); record why that case cannot benefit. Any skill change after the panel means re-running 5.2.
 
 If ITERATE: turn each member's top concern and every Devil's Advocate failure scenario into an
 improvement hypothesis in `autoresearch.ideas.md`, log the panel scores and rationales in

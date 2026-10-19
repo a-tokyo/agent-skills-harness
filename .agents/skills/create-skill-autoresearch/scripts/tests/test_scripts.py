@@ -1267,11 +1267,38 @@ class FinishTest(TempWorkspace):
         self.assertIn(self.gate_line(), data["reason"], "the reason quotes the line to copy")
         self.benchmark(f"**Verdict: SHIP_WITH_CAVEATS**\n\n{self.gate_line()}\n")
         self.assertEqual(self.finish()["verdict"], "SHIP WITH CAVEATS")
+        self.assertIn("needs the panel receipt work/experiments/panel.json", self.finish()["reason"])
+        self.assertEqual(self.run_script("check_gate.py", "--panel").returncode, 0)
         self.assertTrue(self.finish()["finished"])
         (self.ws / "output" / "demo" / "SKILL.md").write_text("---\nname: demo\ndescription: Edited.\n---\n")
         data = self.finish()
         self.assertFalse(data["finished"])
         self.assertIn("skill changed since the gate", data["reason"])
+
+    def test_ship_on_a_panel_that_scored_an_earlier_skill_is_unfinished(self) -> None:
+        self.make_build(["gold-01", "trigger-1"])
+        self.assertEqual(self.run_script("gate.py", "--model", "m").returncode, 0)
+        panel = self.run_script("check_gate.py", "--panel")
+        self.assertEqual(panel.returncode, 0, panel.stdout + panel.stderr)
+        self.assertIn("PANEL RECEIPT: work/experiments/panel.json", panel.stderr)
+        (self.ws / "output" / "demo" / "SKILL.md").write_text("---\nname: demo\ndescription: Fixed after the panel.\n---\n")
+        self.assertEqual(self.run_script("gate.py", "--model", "m").returncode, 0, "the re-run gate validates")
+        self.benchmark(f"Verdict: SHIP\n\n{self.gate_line()}\n")
+        data = self.finish()
+        self.assertFalse(data["finished"], "the r-t2-factory-v030-haiku-5 shape: fixed after the panel, re-gated")
+        self.assertIn("the panel scored an earlier output/demo/", data["reason"])
+        self.assertEqual(self.run_script("check_gate.py", "--panel").returncode, 0)
+        self.assertTrue(self.finish()["finished"])
+
+    def test_plain_ship_with_a_gold_delta_at_or_below_zero_is_unfinished(self) -> None:
+        self.make_build(["gold-01", "trigout-2"])
+        self.assertEqual(self.run_script("gate.py", "--model", "m").returncode, 0)
+        self.assertEqual(self.run_script("check_gate.py", "--panel").returncode, 0)
+        self.benchmark(f"Verdict: SHIP\n\n{self.gate_line()}\n")
+        self.assertIn("gold delta<=0 on trigout-2 caps the verdict at SHIP WITH CAVEATS", self.finish()["reason"])
+        self.benchmark(f"Verdict: SHIP WITH CAVEATS\n\n{self.gate_line()}\n")
+        self.assertTrue(self.finish()["finished"])
+        self.assertEqual(self.run_script("check_gate.py", "--panel", "--finish").returncode, 2)
 
     def test_one_run_gate_never_finishes_a_ship(self) -> None:
         self.make_build(["gold-01"])
