@@ -35,9 +35,9 @@ task-2 with Haiku (median 0.932 vs v0.2.1's 0.969): two of five builds trusted t
 policy over the gold standards, and one hard-coded its outdated approval thresholds. Neither version
 had a rule for that conflict. With the rule, the next candidate run reached 0.969. The cycle-2 run
 (`k-*`), which also carries the tribunal fixes, the cycle-2 scripts and the owned, hash-bound gate,
-has task-2 with Haiku at 0.969 (0.953–0.980), tying v0.2.1. The published cycle-3 run (`p-*`, harness
-`0c94f94`, factory loaded as a plugin so its kill guard was active) has it at 0.958 (0.908–0.989):
-−0.011 against v0.2.1, inside the 0.081 pooled spread.
+has task-2 with Haiku at 0.969 (0.953–0.980), tying v0.2.1. The cycle-3 run (`p-*`, harness `0c94f94`)
+had it at 0.958 (0.908–0.989), and the release run (`r-*`, harness `8e505b0`, factory loaded as a plugin
+so its kill guard was active) at 0.969 (0.926–0.989), tying v0.2.1 again.
 
 ## What the loop taught
 
@@ -53,27 +53,37 @@ has task-2 with Haiku at 0.969 (0.953–0.980), tying v0.2.1. The published cycl
   and 19 passed the validator, one of them with no gold-standard case counted. With the case list
   written by `gate.py record` after a zero-cost load check (cycle 3), 19 of 20 passed again and none
   failed "artifact cases differ"; the one failure skipped the gate entirely and labelled itself
-  `UNSHIPPED`. The gate measures uplift rather than raising quality.
-- **A check the agent must choose to run cannot stop it ending early.** In both the cycle-2 and the
-  cycle-3 run, three Haiku builds ended their turn after the premortem without writing a verdict.
-  `check_gate.py --finish` reports that state, but none of the three ran it. The mechanical kill
-  guard (a `PreToolUse` hook) is the other kind: zero pattern kills were executed in cycle 3, though
-  none was attempted either, so the run never exercised the block.
+  `UNSHIPPED`. In the release run, 20 of 20 passed. The gate measures uplift rather than raising
+  quality.
+- **A check the agent must choose to run cannot stop it ending early; a step that ends in it can.** In
+  both the cycle-2 and the cycle-3 run, three Haiku builds ended their turn after the premortem without
+  writing a verdict, and none of the three ran `check_gate.py --finish`. Once 5.1 wrote the premortem to
+  a file and ended by running the validator (`6a9f6f2`), no build stopped there: 0 of 10 in an interim
+  Haiku run and 0 of 20 in the release run, where every build ran `--finish`. The mechanical kill guard
+  (a `PreToolUse` hook) is the other kind: no pattern kill was executed in cycle 3 or the release run,
+  though none was attempted either, so neither run exercised the block.
 - **The final matrix finds what the loop cannot.** The loop measured one cell (task-2, Haiku); the
   regression E5 targeted only showed up at n=5 there, against a v0.2.1 baseline.
 - **Two builds per measurement is too few.** One bad build moved experiment 3's median past the noise
   threshold on its own; experiment 4 used four.
 
 The before/after comparison against v0.2.1 and bare (n=5 per cell, both tasks, Sonnet 5.5 and Haiku
-5.5; v0.3.0 is the `p-*` run at harness `0c94f94`), with its fidelity counts, is published in
-[Results — cycle 3 final run](https://github.com/a-tokyo/agent-skills/tree/main/benchmarks/create-skill-autoresearch#results--cycle-3-final-run-p--october-2026).
-Median overall v0.3.0 / v0.2.1 / bare: task-2 Sonnet 0.957 / 0.975 / 0.975, task-2 Haiku 0.958 / 0.969 /
-0.969, task Sonnet 0.946 / 0.946 / 0.971, task Haiku 0.886 / 0.871 / 0.896. Criterion 4 passes in every
-cell; its gain condition is met only by task Haiku's +0.015, inside a 0.125 pooled spread. v0.3.0 takes
-3.3–4.7× v0.2.1's wall time on task-2 and more input tokens in every cell (reported, not gated). The
-cycle-2 `k-*` run (harness `a3fa032`) stays published below it as superseded.
+5.5; v0.3.0 is the `r-*` run on the shipped factory, harness `8e505b0`), with its fidelity counts, is
+published in
+[Results — v0.3.0 release](https://github.com/a-tokyo/agent-skills/tree/main/benchmarks/create-skill-autoresearch#results--v030-release-r--october-2026).
+Median overall v0.3.0 / v0.2.1 / bare: task-2 Sonnet 0.975 / 0.975 / 0.975, task-2 Haiku 0.969 / 0.969 /
+0.969, task Sonnet 0.971 / 0.946 / 0.971, task Haiku 0.921 / 0.871 / 0.896. Criterion 4 passes in every
+cell. Its gain condition is met on task Sonnet (+0.025) and task Haiku (+0.050), both inside the 0.135
+pooled spread, so neither is a measured improvement; v0.3.0 is +0.025 over bare on task Haiku (pooled
+spread 0.125) and ties bare elsewhere. Fidelity: 20 of 20 gates valid, 20 of 20 verdicts, no kill
+command, no stale gate, no below-target build labelled shipped. Median wall time is 1.4–4.4× v0.2.1's
+(13.1 against 9.3 minutes on task Sonnet, 28.3 against 17.6 on task Haiku, 23.9 against 8.2 on task-2
+Sonnet, 53.4 against 12.2 on task-2 Haiku) and input tokens 1.9–2.2× (reported, not gated). The earlier
+`p-*` (harness `0c94f94`) and `k-*` (harness `a3fa032`) runs stay published below it as superseded.
 
-Agent-agnostic check (Amendment 3): one build of task under `cursor-agent` (Sonnet 5.5, harness `6a9f6f2`)
-with no `claude` on the build PATH finished in 42 minutes with overall 0.921, a gate valid in manual mode
-(cursor-agent as the executor) and verdict `UNSHIPPED` (training 0.813 below the 0.85 target). One build
-is a smoke test that the pipeline runs without Claude Code, not a quality result.
+Agent-agnostic check (Amendment 3): two task builds under `cursor-agent` (Sonnet 5.5, harness `8e505b0`,
+isolated HOME, no `claude` on the build PATH) scored 0.921 and 0.871, against 0.971 for every Claude
+Code Sonnet build. Both gates validated in manual mode, with an executor each build chose from Cursor's
+models, and both ended `UNSHIPPED` on a panel score below the ship floor, after 55 and 88 minutes. Two
+builds show that the pipeline runs and labels honestly without Claude Code; they are not a quality
+result.
