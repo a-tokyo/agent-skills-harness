@@ -16,8 +16,11 @@ off, the job keeps running. A second start while a `gate` job is live is refused
 `scaffold_script`, run-case.sh and --executor in manual mode) and exit 3 without starting anything,
 or stopping a running gate, when one is missing.
 
-Mode: `plugin` when `claude plugin eval --help` exits 0 and the skill is model-invoked, otherwise
-`manual`. The case list is never typed by hand: `gate.py record` (3.6) writes `plugin_eval` and
+Mode (--backend): `plugin` runs Claude Code's `claude plugin eval` and needs it (`--help` exits 0) and a
+model-invoked skill; `manual` runs run-case.sh and never calls `claude`. The default is `plugin` only
+when the build runs inside Claude Code ($CLAUDECODE is set), the skill is model-invoked and the probe
+exits 0, else `manual`: a build on another host targets that host's model, which plugin eval cannot run,
+even when `claude` is installed. The case list is never typed by hand: `gate.py record` (3.6) writes `plugin_eval` and
 `plugin_eval_available` into work/evaluation/data-split.yaml from disk, and every gate run records
 again before it starts, so the list always matches what runs:
 
@@ -27,7 +30,7 @@ again before it starts, so the list always matches what runs:
   manual  the gate gold standards from the split: `test` with 10 or more gold standards, every gold
           standard with 3-9 (a `test` split there is an error); run-case.sh gets each entry as its <case>
 
-    gate.py record [--workspace DIR] [--skill NAME]     # exit 0 recorded, 3 precondition missing
+    gate.py record [--workspace DIR] [--skill NAME] [--backend plugin|manual]   # exit 0 recorded, 3 precondition missing
 
 Each eval run goes in its own owned process group, stopped on timeout.
 
@@ -43,7 +46,7 @@ the artifact in work/evaluation/gate.json (check_gate.py fails once any changes)
 aside to <name>.prev.json before running so a stale file can never pass, ends by running
 check_gate.py, and writes nothing outside work/evaluation/ and work/pids/.
 
-    gate.py --model <model> [--workspace DIR] [--skill NAME] [--runs 3] [--jobs 4]
+    gate.py --model <model> [--workspace DIR] [--skill NAME] [--backend plugin|manual] [--runs 3] [--jobs 4]
             [--allow-tools Bash Write] [--in-sample] [--executor single-call|agentic]
             [--timeout 5400] [--case-timeout 1200] [--detach] [--restart]
     gate.py --stop [--workspace DIR]
@@ -221,14 +224,34 @@ def load_check(ws: Path) -> None:
         print(f"gate: load check exited {out.returncode} without naming a case; continuing", file=sys.stderr)
 
 
-def record_cases(ws: Path, skill: str) -> tuple[list[str], str, int | str, bool]:
+def default_backend() -> str:
+    """`plugin` inside Claude Code, which sets $CLAUDECODE in the shells it runs; `manual` elsewhere."""
+    return "plugin" if os.environ.get("CLAUDECODE") else "manual"
+
+
+def pick_mode(invoked: bool, backend: str | None) -> tuple[str, int | str, str]:
+    """(mode, probe exit code or NOT_PROBED, why) for the --backend asked for (None: default_backend).
+    Raises GateError when --backend plugin is asked for and cannot run."""
+    asked = backend or default_backend()
+    if asked == "manual":
+        why = "--backend manual" if backend else "not inside Claude Code ($CLAUDECODE unset)"
+        return "manual", NOT_PROBED, f"{why}: the manual protocol, claude not probed"
+    if not invoked:
+        if backend:
+            raise GateError("--backend plugin: a user-invoked skill never fires through the Skill tool; use manual")
+        return "manual", NOT_PROBED, "user-invoked skill: always the manual protocol, claude not probed"
+    available = probe_plugin_eval()
+    if available != 0 and backend:
+        raise GateError(f"--backend plugin needs `claude plugin eval` (`claude plugin eval --help` exited {available})")
+    return ("plugin" if available == 0 else "manual"), available, "exit code of `claude plugin eval --help`"
+
+
+def record_cases(ws: Path, skill: str, backend: str | None = None) -> tuple[list[str], str, int | str, bool]:
     """Write the gate's case list into data-split.yaml from what is on disk: (cases, mode, probe exit
     code, model-invoked). Plugin mode lists the suite's case directories after a load check; manual mode
-    lists the gate gold standards from the split (3.6). A user-invoked skill is always manual, so the
-    probe is skipped and nothing calls `claude`; manual mode never calls it either."""
+    lists the gate gold standards from the split (3.6) and never calls `claude`."""
     invoked = model_invoked(ws / "output" / skill / "SKILL.md")
-    available: int | str = probe_plugin_eval() if invoked else NOT_PROBED
-    mode = "plugin" if available == 0 else "manual"
+    mode, available, why = pick_mode(invoked, backend)
     if mode == "plugin":
         cases, source = suite_cases(ws), (PLUGIN_DIR / "evals").as_posix()
         load_check(ws)
@@ -245,7 +268,7 @@ def record_cases(ws: Path, skill: str) -> tuple[list[str], str, int | str, bool]
             raise GateError(f"{DATA_SPLIT} leaves out gold standards found on disk: {', '.join(omitted)}; list each "
                             "under all_cases, training, validation or test (4.2), or move a file that is not a "
                             "gold standard out of that folder")
-    write_gate_cases(ws / DATA_SPLIT, cases, available, source)
+    write_gate_cases(ws / DATA_SPLIT, cases, available, source, why)
     return cases, mode, available, invoked
 
 
@@ -322,7 +345,7 @@ def preconditions(ws: Path, args: argparse.Namespace) -> tuple[str, list[str], s
     Re-records the case list from disk first, so the gate never runs a hand-edited list. Raises
     GateError naming the first missing piece."""
     skill = resolve_skill(ws, args.skill)
-    cases, mode, available, invoked = record_cases(ws, skill)
+    cases, mode, available, invoked = record_cases(ws, skill, args.backend)
     check_scaffolds(ws, cases)
     if mode == "manual":
         check_adapter(ws, args)
@@ -465,7 +488,8 @@ def run_gate(ws: Path, args: argparse.Namespace) -> int:
     try:
         skill, cases, mode, available, invoked = preconditions(ws, args)
         artifact = PLUGIN_ARTIFACT if mode == "plugin" else MANUAL_ARTIFACT
-        record = {"mode": mode, "plugin_eval_available": available, "model_invoked": invoked, "skill": skill,
+        record = {"mode": mode, "backend": args.backend or default_backend(), "plugin_eval_available": available,
+                  "model_invoked": invoked, "skill": skill,
                   "model": args.model, "runs": args.runs, "in_sample": args.in_sample,
                   "cases": cases, "artifact": artifact.as_posix(),
                   "skill_sha256": skill_sha256(ws, skill), "cases_sha256": cases_sha256(ws, cases),
@@ -521,6 +545,8 @@ def _job_argv(ws: Path, args: argparse.Namespace) -> list[str]:
             "--timeout", f"{args.timeout:g}", "--case-timeout", f"{args.case_timeout:g}"]
     if args.skill is not None:
         argv += ["--skill", args.skill]
+    if args.backend:
+        argv += ["--backend", args.backend]
     if args.in_sample:
         argv.append("--in-sample")
     if args.executor:
@@ -580,9 +606,9 @@ def supervise(ws: Path, args: argparse.Namespace) -> int:
     return rc
 
 
-def record(ws: Path, skill: str | None) -> int:
+def record(ws: Path, skill: str | None, backend: str | None) -> int:
     try:
-        cases, mode, available, _ = record_cases(ws, resolve_skill(ws, skill))
+        cases, mode, available, _ = record_cases(ws, resolve_skill(ws, skill), backend)
     except GateError as exc:
         log_attempt(ws, "record", str(exc))
         print(f"gate: {exc}", file=sys.stderr)
@@ -600,6 +626,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="record: write the case list into data-split.yaml from disk, then exit")
     parser.add_argument("--workspace", type=Path, default=Path("."), help="build workspace root (default: .)")
     parser.add_argument("--skill", help="skill name under output/ (default: the only one)")
+    parser.add_argument("--backend", choices=["plugin", "manual"],
+                        help="plugin: claude plugin eval (Claude Code); manual: run-case.sh (default: plugin "
+                             "inside Claude Code when it can run, else manual)")
     parser.add_argument("--model", help="the model the skill targets (pinned for both arms; required unless --stop)")
     parser.add_argument("--runs", type=int, default=REQUIRED_RUNS,
                         help=f"runs per arm per case (default {REQUIRED_RUNS}; check_gate requires {REQUIRED_RUNS})")
@@ -620,7 +649,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "record":
         if args.stop or args.detach or args.restart:
             parser.error("record takes no --stop, --detach or --restart")
-        return record(args.workspace.resolve(), args.skill)
+        return record(args.workspace.resolve(), args.skill, args.backend)
     if args.stop and (args.detach or args.restart):
         parser.error("--stop takes no --detach or --restart")
     if not args.stop and not args.model:

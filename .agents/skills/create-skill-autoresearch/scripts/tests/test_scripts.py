@@ -140,8 +140,10 @@ SCORING_ADAPTER = textwrap.dedent('''\
 
 
 def _env(bin_dir: Path, **extra: str) -> dict[str, str]:
+    """CLAUDECODE=1 as inside Claude Code, where the gate defaults to plugin eval; pass CLAUDECODE="" for
+    another host."""
     return {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
-            "PYTHONDONTWRITEBYTECODE": "1", **extra}
+            "PYTHONDONTWRITEBYTECODE": "1", "CLAUDECODE": "1", **extra}
 
 
 def _path_without_claude() -> str:
@@ -509,7 +511,7 @@ class DataSplitReaderTest(TempWorkspace):
     def test_non_ascii_case_names_round_trip_through_write_and_read(self) -> None:
         path = self.ws / "data-split.yaml"
         cases = ["gold-é", "naïve-02", "日本-03", "plain-04"]
-        gate_common.write_gate_cases(path, cases, 0, "plugin/evals")
+        gate_common.write_gate_cases(path, cases, 0, "plugin/evals", "probe exit code")
         self.assertIn('"gold-\\u00e9"', path.read_text(), "written as JSON escapes")
         self.assertEqual(gate_common.read_data_split(path).plugin_eval, cases)
 
@@ -1018,6 +1020,36 @@ class GateManualTest(TempWorkspace):
         out = self.run_script("gate.py", "--model", "m", "--executor", "agentic", FAKE_HELP_RC="1")
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         self.assertEqual(self.evaluation("gate.json")["plugin_eval_available"], 1)
+
+    def test_another_host_runs_the_manual_protocol_even_with_claude_installed(self) -> None:
+        self.make_build(["gold-01"], invoked=True, manual=True)
+        self.write_adapter()
+        record = self.run_script("gate.py", "record", CLAUDECODE="")
+        self.assertEqual(record.returncode, 0, record.stderr)
+        self.assertIn("mode manual (plugin eval probe exit not-probed)", record.stdout)
+        out = self.run_script("gate.py", "--model", "gpt-5.6", "--executor", "agentic", CLAUDECODE="")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertEqual((self.evaluation("gate.json")["mode"], self.evaluation("gate.json")["backend"]),
+                         ("manual", "manual"))
+        self.assertFalse(self.argv_log.exists(), "the other host's model id never reached claude")
+
+    def test_backend_manual_inside_claude_code_never_calls_claude(self) -> None:
+        self.make_build(["gold-01"], invoked=True, manual=True)
+        self.write_adapter()
+        out = self.run_script("gate.py", "--backend", "manual", "--model", "m", "--executor", "agentic")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertEqual(self.evaluation("gate.json")["mode"], "manual")
+        self.assertFalse(self.argv_log.exists())
+
+    def test_backend_plugin_that_cannot_run_is_a_precondition_error(self) -> None:
+        self.make_build(["gold-01"], invoked=True, manual=True)
+        out = self.run_script("gate.py", "record", "--backend", "plugin", CLAUDECODE="", no_claude=True)
+        self.assertEqual(out.returncode, 3)
+        self.assertIn("--backend plugin needs `claude plugin eval`", out.stderr)
+        self.make_build([], invoked=False, ws=self.root / "user-invoked")
+        out = self.run_script("gate.py", "record", "--backend", "plugin", ws=self.root / "user-invoked")
+        self.assertEqual(out.returncode, 3)
+        self.assertIn("a user-invoked skill never fires", out.stderr)
 
     def test_run_timeout_leaves_a_partial_artifact(self) -> None:
         self.make_build(["input-01", "slow"], invoked=False)

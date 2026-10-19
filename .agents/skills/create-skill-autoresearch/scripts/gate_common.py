@@ -197,12 +197,10 @@ def _block_end(lines: list[str], start: int) -> int:
     return end
 
 
-def write_gate_cases(path: Path, cases: list[str], available: int | str, source: str) -> None:
-    """Rewrite `plugin_eval` (as a block list) and `plugin_eval_available` in data-split.yaml, keeping
-    every other line; append them when absent. Creates the file when it does not exist."""
+def write_gate_cases(path: Path, cases: list[str], available: int | str, source: str, why: str) -> None:
+    """Rewrite `plugin_eval` (as a block list) and `plugin_eval_available` (commented with `why`) in
+    data-split.yaml, keeping every other line; append them when absent. Creates the file when absent."""
     lines = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
-    why = ("exit code of `claude plugin eval --help`" if isinstance(available, int)
-           else "user-invoked skill: always the manual protocol, claude not probed")
     new = {
         "plugin_eval_available": [f"plugin_eval_available: {available}  # {why}"],
         "plugin_eval": [f"plugin_eval:  # written by scripts/gate.py record from {source}; re-run it, never edit"]

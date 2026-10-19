@@ -110,7 +110,9 @@ script tests in CI (`windows-latest`), not yet by a live build on a Windows host
 ## What needs Claude Code
 
 - **`claude plugin eval`** (3.6 suite, 5.0 plugin path). Elsewhere the gate runs the manual protocol with no
-  `claude` call; `gate.py` picks the path by SKILL.md 3.6's rule.
+  `claude` call; `gate.py` picks the path by SKILL.md 3.6's rule: plugin eval only inside Claude Code
+  (which sets `$CLAUDECODE`), else manual, even where `claude` is installed, since the build targets its own
+  host's model. `--backend plugin|manual` forces one.
 - **skill-creator's description optimizer** (4.6) measures triggering through `claude -p`. Elsewhere revise the
   description by hand against the same eval-set queries and log that no trigger rate was measured.
 - **The reserved words `anthropic`/`claude`** in a skill `name` are a Claude platform rule; the 3.3 checklist
