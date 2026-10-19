@@ -382,7 +382,7 @@ def write_text(path: Path, text: str) -> None:
             os.replace(tmp, path)
             return
         except PermissionError:
-            # Windows: a reader holding path open blocks the replace for a moment.
+            # Windows: a reader holding path open blocks the replace for a moment (50 x 20 ms: a second).
             if os.name != "nt":
                 raise
             time.sleep(0.02)

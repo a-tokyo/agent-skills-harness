@@ -92,17 +92,33 @@ EXIT_INVALID = 1
 EXIT_PRECONDITION = 3
 EXIT_STOPPED = 143
 JOB = "gate"
+# `claude plugin eval --help` answers in seconds; a minute bounds a CLI hung on a first-run update or login.
 PROBE_TIMEOUT = 60
+# How often the gate checks its runs and the stop request: a prompt stop without a busy loop.
 POLL_SECONDS = 0.5
+# --stop/--restart grace for the gate job: CHILD_GRACE for its eval runs, plus time to write its record.
 STOP_GRACE = 30
+# An eval run's time to exit after TERM before KILL; a run being stopped only needs to flush its log.
 CHILD_GRACE = 10
+# The suggested `run_owned.py wait` timeout: under the 600 s a Claude Code Bash call may wait, so a poll
+# returns (exit 124) before the host cuts the call off.
 WAIT_HINT_SECONDS = 540
 SCORE_RE = re.compile(r"^SCORE=(\S+)\s*$", re.MULTILINE)
 SCAFFOLD_RE = re.compile(r"^\s*scaffold_script:\s*(\S.*)$")
 NAME_RE = re.compile(r"^name:\s*(\S.*)$")
+# The zero-cost load check parses every case file and stops before any run; two minutes covers a large
+# suite on a cold CLI.
 LOAD_CHECK_TIMEOUT = 120
 NOT_PROBED = "not-probed"
+# One retry absorbs a transient failure (rate limit, dropped connection); a second failure in a row is
+# reported, leaving the artifact partial rather than retrying it out of sight.
 ATTEMPTS = 2
+# Concurrent eval runs: four keeps a suite moving while staying under a typical API account's rate limit.
+DEFAULT_JOBS = 4
+# Defaults for a whole plugin eval (90 minutes) and one manual run (20 minutes, an agentic run included):
+# well past a healthy run, so a run that reaches them is hung and is stopped, not waited on.
+EVAL_TIMEOUT = 5400
+CASE_TIMEOUT = 1200
 SCRIPTS = Path(__file__).resolve().parent
 
 # Eval runs this gate job started and has not finished waiting on; TERM stops them before exiting.
@@ -290,7 +306,7 @@ def run_owned_job(sdir: Path, name: str, cmd: list[str], cwd: Path, timeout: flo
         if _STOP.is_set():
             raise GateStopped()
         if time.monotonic() >= deadline:
-            run_owned.stop(sdir, name, grace=10, proc=proc)
+            run_owned.stop(sdir, name, grace=CHILD_GRACE, proc=proc)
             rc = None
             break
     with _LOCK:
@@ -632,15 +648,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", help="the model the skill targets (pinned for both arms; required unless --stop)")
     parser.add_argument("--runs", type=int, default=REQUIRED_RUNS,
                         help=f"runs per arm per case (default {REQUIRED_RUNS}; check_gate requires {REQUIRED_RUNS})")
-    parser.add_argument("--jobs", type=int, default=4, help="concurrent runs, 1-8 (default 4)")
+    parser.add_argument("--jobs", type=int, default=DEFAULT_JOBS, help=f"concurrent runs, 1-8 (default {DEFAULT_JOBS})")
     parser.add_argument("--allow-tools", nargs="+", default=["Bash", "Write"],
                         help="plugin mode: gated tools the skill needs (default: Bash Write)")
     parser.add_argument("--in-sample", action="store_true",
                         help="the gate cases are also training cases (3-9 gold standards)")
     parser.add_argument("--executor", choices=["single-call", "agentic"],
                         help="manual mode: how run-case.sh executes the skill (required there)")
-    parser.add_argument("--timeout", type=float, default=5400, help="plugin mode: seconds for the whole eval")
-    parser.add_argument("--case-timeout", type=float, default=1200, help="manual mode: seconds per run")
+    parser.add_argument("--timeout", type=float, default=EVAL_TIMEOUT,
+                        help=f"plugin mode: seconds for the whole eval (default {EVAL_TIMEOUT})")
+    parser.add_argument("--case-timeout", type=float, default=CASE_TIMEOUT,
+                        help=f"manual mode: seconds per run (default {CASE_TIMEOUT})")
     parser.add_argument("--detach", action="store_true", help="start the `gate` job and return; poll with run_owned.py wait")
     parser.add_argument("--restart", action="store_true",
                         help="stop the recorded `gate` job, then start a new one detached")
