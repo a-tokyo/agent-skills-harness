@@ -423,9 +423,12 @@ minutes), retries a failed run once, and writes `uplift.json`; a second failure 
 with an `errors` list. Both modes record `work/evaluation/gate.json` (mode, probe exit code, cases, and
 sha256 hashes of `output/<skill-name>/` and of the case set — names plus each case's `evals/` directory;
 interpreter caches excluded — and, when the run finishes, of `run-case.sh`, every file under `input/`,
-the scorers and fixtures under `work/evaluation/` (not `plugin/`, gate outputs, dotfiles or
-`*.tmp`/`*.out`/`*.log` scratch) and the artifact itself), move a previous artifact to `<name>.prev.json`
-first so a stale file can never pass, and end by running `check_gate.py`. It exits 0 only when `gate.json`
+every other file under `work/evaluation/` — scorers, fixtures, golden `*.out` files, dotfiles, logs and the
+wrapper plugin's manifest and mocks; not the gate's own outputs, `*.tmp`, `*.prev.json`, `plugin/skills/` or
+`plugin/evals/results/` — and the artifact itself), so keep scratch and logs (a saved `check_gate.py`
+output, say) under `work/experiments/`: one written under `work/evaluation/` after the gate makes it stale.
+It moves a previous artifact to `<name>.prev.json`
+first so a stale file can never pass, and ends by running `check_gate.py`. It exits 0 only when `gate.json`
 records a finished run whose hashes still match, and the artifact says `"partial": false`, covers exactly
 the recorded cases and has at least 3 runs per arm. Any edit after the gate fails it: "skill changed since
 the gate; re-run 5.0" for the skill or suite, "gate inputs changed since the gate; re-run 5.0" for the
