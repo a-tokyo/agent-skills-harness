@@ -325,6 +325,12 @@ class CursorPluginTest(unittest.TestCase):
         self.assertEqual(hook["command"], 'sh "${CURSOR_PLUGIN_ROOT}/hooks/kill-guard"')
         self.assertNotEqual(manifest["hooks"], "hooks/hooks.json", "hooks/hooks.json is Claude's format")
 
+    def test_hosts_md_labels_the_sh_plugin_hook_unsupported_on_native_windows(self) -> None:
+        """Cursor runs hooks through PowerShell on native Windows and fails open when `sh` cannot start."""
+        hosts = (SKILL / "references" / "hosts.md").read_text(encoding="utf-8")
+        self.assertIn("**The Cursor plugin hook is unsupported on native Windows.**", hosts)
+        self.assertIn("py -3 <skill-dir>\\hooks\\kill_guard.py", hosts)
+
 
 def run_configured(command: str, variable: str, payload: dict) -> subprocess.CompletedProcess:
     """Run a hook's configured shell-form command the way a host does: the plugin-root placeholder
