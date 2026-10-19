@@ -72,3 +72,8 @@ Median overall v0.3.0 / v0.2.1 / bare: task-2 Sonnet 0.957 / 0.975 / 0.975, task
 cell; its gain condition is met only by task Haiku's +0.015, inside a 0.125 pooled spread. v0.3.0 takes
 3.3–4.7× v0.2.1's wall time on task-2 and more input tokens in every cell (reported, not gated). The
 cycle-2 `k-*` run (harness `a3fa032`) stays published below it as superseded.
+
+Agent-agnostic check (Amendment 3): one build of task under `cursor-agent` (Sonnet 5.5, harness `6a9f6f2`)
+with no `claude` on the build PATH finished in 42 minutes with overall 0.921, a gate valid in manual mode
+(cursor-agent as the executor) and verdict `UNSHIPPED` (training 0.813 below the 0.85 target). One build
+is a smoke test that the pipeline runs without Claude Code, not a quality result.
