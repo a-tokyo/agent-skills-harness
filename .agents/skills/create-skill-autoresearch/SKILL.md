@@ -208,7 +208,7 @@ upstream autoresearch never commits one, and its `git reset --hard HEAD~1` needs
 **Pick the path first.** Build the plugin-eval suite below only when the build runs in Claude Code, `claude plugin eval
 --help` exits 0 and the skill is model-invoked. Otherwise — another host (plugin eval cannot run its model), or a user-invoked
 skill (`disable-model-invocation: true` never fires through the Skill tool, so plugin eval's with-arm would measure nothing)
-— skip it: 5.0 runs the gate gold standards by the **manual protocol** (`--backend manual`), with no `claude` call anywhere.
+— skip it: `gate.py` picks the **manual protocol** for 5.0 itself (gate gold standards, no `claude` call anywhere).
 
 Plugin path: build the suite in a wrapper plugin under `work/` so nothing eval-related ships: `work/evaluation/plugin/` holds `.claude-plugin/plugin.json` (`name`, `version`) and `evals/`
 (`scripts/gate.py` copies the skill to `skills/<skill-name>/` before every run). From that directory, scaffold each
@@ -355,8 +355,8 @@ python3 <skill-dir>/scripts/run_owned.py wait gate --timeout 540    # repeat unt
 
 `gate.py` runs as the owned job `gate`, as `run_owned.py start gate -- python3 <skill-dir>/scripts/gate.py …`
 would (log `work/pids/gate.log`), and refuses a second start while it runs. To restart the gate, run
-`gate.py --restart` with the same options; `gate.py --stop` ends it. It picks the path by the 3.6 rule (`--backend plugin|manual`
-forces one, and a host other than Claude Code always passes `--backend manual`; manual runs `run-case.sh` and needs `--executor`), runs every recorded case 3 times per arm, and writes `plugin-eval.json`
+`gate.py --restart` with the same options; `gate.py --stop` ends it. It picks the path by the 3.6 rule (a Claude Code build never passes
+`--backend manual`; only another host whose shell inherits `$CLAUDECODE` does, plus `--force-manual "<host>: <why>"`; manual runs `run-case.sh` and needs `--executor`), runs every recorded case 3 times per arm, and writes `plugin-eval.json`
 or `uplift.json` plus `gate.json` (hashes of skill, cases, scorers, fixtures, artifact) under `work/evaluation/`. Grant only the tools
 the skill needs. With 3-9 gold standards pass `--in-sample` (gate cases are training cases; `BENCHMARK.md` and
 the panel label Δ in-sample). A non-zero exit says why: fix the suite or `run-case.sh` and re-run; only

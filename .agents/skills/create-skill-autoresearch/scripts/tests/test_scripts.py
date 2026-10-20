@@ -229,7 +229,10 @@ class TempWorkspace(unittest.TestCase):
             (plugin / "evals" / case / "prompt.md").write_text(f"Do {case}.\n", encoding="utf-8")
 
     def write_adapter(self, body: str = SCORING_ADAPTER) -> None:
-        adapter = self.ws / "work" / "evaluation" / "run-case.sh"
+        self.write_adapter_to(self.ws, body)
+
+    def write_adapter_to(self, ws: Path, body: str = SCORING_ADAPTER) -> None:
+        adapter = ws / "work" / "evaluation" / "run-case.sh"
         adapter.write_text(body)
         adapter.chmod(0o755)
 
@@ -1130,13 +1133,61 @@ class GateManualTest(TempWorkspace):
                          ("manual", "manual"))
         self.assertFalse(self.argv_log.exists(), "the other host's model id never reached claude")
 
-    def test_backend_manual_inside_claude_code_never_calls_claude(self) -> None:
+    def test_backend_manual_inside_claude_code_is_refused_without_force_manual(self) -> None:
         self.make_build(["gold-01"], invoked=True, manual=True)
         self.write_adapter()
-        out = self.run_script("gate.py", "--backend", "manual", "--model", "m", "--executor", "agentic")
+        for args in (["record", "--backend", "manual"],
+                     ["--detach", "--backend", "manual", "--model", "m", "--executor", "agentic"],
+                     ["--backend", "manual", "--model", "m", "--executor", "agentic"]):
+            out = self.run_script("gate.py", *args)
+            self.assertEqual(out.returncode, 3, out.stdout + out.stderr)
+            self.assertIn("--force-manual", out.stdout + out.stderr)
+            if args[0] == "--detach":
+                self.assertFalse((self.ws / "work" / "pids" / "gate.json").exists(), "no gate job was started")
+        self.assertFalse((self.ws / "work" / "evaluation" / "gate.json").exists(), "no gate record was written")
+        self.assertFalse((self.ws / "work" / "evaluation" / "uplift.json").exists())
+        attempts = gate_common.read_attempts(self.ws)
+        self.assertEqual([a["step"] for a in attempts], ["record", "gate", "gate"])
+        self.assertTrue(all("--backend manual inside Claude Code" in a["error"] for a in attempts))
+
+    def test_backend_manual_still_runs_where_plugin_eval_cannot_or_the_skill_is_user_invoked(self) -> None:
+        self.make_build(["gold-01"], invoked=True, manual=True)
+        self.write_adapter()
+        out = self.run_script("gate.py", "--backend", "manual", "--model", "m", "--executor", "agentic",
+                              FAKE_HELP_RC="1")
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
-        self.assertEqual(self.evaluation("gate.json")["mode"], "manual")
-        self.assertFalse(self.argv_log.exists())
+        self.make_build(["input-01"], invoked=False, ws=self.root / "user-invoked")
+        self.write_adapter_to(self.root / "user-invoked")
+        out = self.run_script("gate.py", "--backend", "manual", "--model", "m", "--executor", "single-call",
+                              ws=self.root / "user-invoked")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+
+    def test_force_manual_runs_unprobed_and_logs_the_reason(self) -> None:
+        self.make_build(["gold-01"], invoked=True, manual=True)
+        self.write_adapter()
+        reason = "cursor-agent:  the benchmark launched it\nfrom a Claude Code shell"
+        out = self.run_script("gate.py", "--backend", "manual", "--force-manual", reason, "--model", "gpt-5.6",
+                              "--executor", "agentic")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        logged = "cursor-agent: the benchmark launched it from a Claude Code shell"
+        record = self.evaluation("gate.json")
+        self.assertEqual((record["mode"], record["force_manual"]), ("manual", logged))
+        split = (self.ws / "work" / "evaluation" / "data-split.yaml").read_text(encoding="utf-8")
+        self.assertIn(logged, split)
+        self.assertEqual(gate_common.read_data_split(self.ws / "work" / "evaluation" / "data-split.yaml")
+                         .plugin_eval_available, "not-probed")
+        self.assertFalse(self.argv_log.exists(), "a forced manual gate never calls claude")
+        self.assertEqual(self.run_script("check_gate.py").returncode, 0)
+
+    def test_force_manual_needs_backend_manual_and_a_host_and_reason(self) -> None:
+        self.make_build(["gold-01"], invoked=True, manual=True)
+        for args in (["record", "--force-manual", "cursor: why"],
+                     ["record", "--backend", "plugin", "--force-manual", "cursor: why"],
+                     ["record", "--backend", "manual", "--force-manual", "no colon"],
+                     ["record", "--backend", "manual", "--force-manual", "cursor:  "]):
+            out = self.run_script("gate.py", *args)
+            self.assertEqual(out.returncode, 2, args)
+            self.assertIn("--force-manual goes with --backend manual", out.stderr)
 
     def test_backend_plugin_that_cannot_run_is_a_precondition_error(self) -> None:
         self.make_build(["gold-01"], invoked=True, manual=True)

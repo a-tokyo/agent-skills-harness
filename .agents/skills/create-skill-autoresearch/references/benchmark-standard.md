@@ -82,7 +82,9 @@ Limits: one task, six skills, two repeats, one model family as executor and judg
 `scripts/gate.py` (SKILL.md 5.0) runs this instead of `claude plugin eval` whenever the build runs outside
 Claude Code (`$CLAUDECODE` unset: another host targets its own model), `claude plugin eval --help` does not
 exit 0, the skill is user-invoked (it never fires through the Skill tool, so plugin eval's with-arm measures
-nothing), or `--backend manual` asks for it. It calls no `claude` command. It runs the
+nothing), or `--backend manual --force-manual "<host>: <why>"` asks for it on another host whose shell inherits
+`$CLAUDECODE` (a Claude Code build never passes `--backend manual`: for a model-invoked skill plugin eval can run,
+`gate.py` refuses it). It calls no `claude` command. It runs the
 gate gold standards on the pinned model:
 
 - **Arms**: *with* gets the shipped `SKILL.md` as its system prompt; *without* gets no system prompt.

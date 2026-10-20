@@ -20,7 +20,10 @@ Mode (--backend): `plugin` runs Claude Code's `claude plugin eval` and needs it 
 model-invoked skill; `manual` runs run-case.sh and never calls `claude`. The default is `plugin` only
 when the build runs inside Claude Code ($CLAUDECODE is set), the skill is model-invoked and the probe
 exits 0, else `manual`: a build on another host targets that host's model, which plugin eval cannot run,
-even when `claude` is installed. The case list is never typed by hand: `gate.py record` (3.6) writes `plugin_eval` and
+even when `claude` is installed. Inside Claude Code, `--backend manual` on a model-invoked skill that plugin
+eval can run is refused (exit 3): it costs a headless session per case, arm and run. Only a build on another
+host whose shell inherits $CLAUDECODE passes `--backend manual --force-manual "<host>: <reason>"`; the reason
+is logged in gate.json (`force_manual`) and data-split.yaml. The case list is never typed by hand: `gate.py record` (3.6) writes `plugin_eval` and
 `plugin_eval_available` into work/evaluation/data-split.yaml from disk, and every gate run records
 again before it starts, so the list always matches what runs:
 
@@ -30,7 +33,8 @@ again before it starts, so the list always matches what runs:
   manual  the gate gold standards from the split: `test` with 10 or more gold standards, every gold
           standard with 3-9 (a `test` split there is an error); run-case.sh gets each entry as its <case>
 
-    gate.py record [--workspace DIR] [--skill NAME] [--backend plugin|manual]   # exit 0 recorded, 3 precondition missing
+    gate.py record [--workspace DIR] [--skill NAME] [--backend plugin|manual [--force-manual REASON]]
+                                    # exit 0 recorded, 3 precondition missing
 
 Each eval run goes in its own owned process group, stopped on timeout.
 
@@ -49,7 +53,8 @@ changes. It moves a previous artifact
 aside to <name>.prev.json before running so a stale file can never pass, ends by running
 check_gate.py, and writes nothing outside work/evaluation/ and work/pids/.
 
-    gate.py --model <model> [--workspace DIR] [--skill NAME] [--backend plugin|manual] [--runs 3] [--jobs 4]
+    gate.py --model <model> [--workspace DIR] [--skill NAME] [--backend plugin|manual [--force-manual REASON]]
+            [--runs 3] [--jobs 4]
             [--allow-tools Bash Write] [--in-sample] [--executor single-call|agentic]
             [--timeout 5400] [--case-timeout 1200] [--detach] [--restart]
     gate.py --stop [--workspace DIR]
@@ -251,10 +256,22 @@ def default_backend() -> str:
     return "plugin" if os.environ.get("CLAUDECODE") else "manual"
 
 
-def pick_mode(invoked: bool, backend: str | None) -> tuple[str, int | str, str]:
+def pick_mode(invoked: bool, backend: str | None, force_manual: str | None = None) -> tuple[str, int | str, str]:
     """(mode, probe exit code or NOT_PROBED, why) for the --backend asked for (None: default_backend).
-    Raises GateError when --backend plugin is asked for and cannot run."""
+    Raises GateError when --backend plugin is asked for and cannot run, and when --backend manual is asked
+    for inside Claude Code on a model-invoked skill that plugin eval can run, unless --force-manual gives
+    a reason: there the manual protocol only costs more (a headless session per case, arm and run)."""
     asked = backend or default_backend()
+    if asked == "manual" and force_manual:
+        return "manual", NOT_PROBED, f"--backend manual --force-manual \"{force_manual}\"; claude not probed"
+    if asked == "manual" and backend and invoked and os.environ.get("CLAUDECODE"):
+        available = probe_plugin_eval()
+        if available == 0:
+            raise GateError("--backend manual inside Claude Code: this skill is model-invoked and `claude plugin "
+                            "eval` runs, so the gate is plugin mode; drop --backend manual. Only a build on "
+                            "another host whose shell inherits $CLAUDECODE passes --backend manual --force-manual "
+                            "\"<that host>: <why>\" (logged in gate.json and data-split.yaml)")
+        return "manual", available, "--backend manual: exit code of `claude plugin eval --help`"
     if asked == "manual":
         why = "--backend manual" if backend else "not inside Claude Code ($CLAUDECODE unset)"
         return "manual", NOT_PROBED, f"{why}: the manual protocol, claude not probed"
@@ -268,12 +285,13 @@ def pick_mode(invoked: bool, backend: str | None) -> tuple[str, int | str, str]:
     return ("plugin" if available == 0 else "manual"), available, "exit code of `claude plugin eval --help`"
 
 
-def record_cases(ws: Path, skill: str, backend: str | None = None) -> tuple[list[str], str, int | str, bool]:
+def record_cases(ws: Path, skill: str, backend: str | None = None,
+                 force_manual: str | None = None) -> tuple[list[str], str, int | str, bool]:
     """Write the gate's case list into data-split.yaml from what is on disk: (cases, mode, probe exit
     code, model-invoked). Plugin mode lists the suite's case directories after a load check; manual mode
     lists the gate gold standards from the split (3.6) and never calls `claude`."""
     invoked = model_invoked(ws / "output" / skill / "SKILL.md")
-    mode, available, why = pick_mode(invoked, backend)
+    mode, available, why = pick_mode(invoked, backend, force_manual)
     if mode == "plugin":
         cases, source = suite_cases(ws), (PLUGIN_DIR / "evals").as_posix()
         load_check(ws)
@@ -367,13 +385,14 @@ def preconditions(ws: Path, args: argparse.Namespace) -> tuple[str, list[str], s
     Re-records the case list from disk first, so the gate never runs a hand-edited list. Raises
     GateError naming the first missing piece."""
     skill = resolve_skill(ws, args.skill)
-    cases, mode, available, invoked = record_cases(ws, skill, args.backend)
+    cases, mode, available, invoked = record_cases(ws, skill, args.backend, args.force_manual)
     check_scaffolds(ws, cases)
     if mode == "manual":
         check_adapter(ws, args)
     elif not CLAUDE_MODEL_RE.search(args.model or ""):
         print(f"gate: warning: plugin mode runs Claude models, and --model {args.model!r} names none; a build on "
-              "another host (launched from Claude Code, which exports $CLAUDECODE) passes --backend manual",
+              "another host (launched from Claude Code, which exports $CLAUDECODE) passes --backend manual "
+              "--force-manual '<host>: <reason>'",
               file=sys.stderr)
     return skill, cases, mode, available, invoked
 
@@ -519,7 +538,7 @@ def run_gate(ws: Path, args: argparse.Namespace) -> int:
         skill, cases, mode, available, invoked = preconditions(ws, args)
         artifact = PLUGIN_ARTIFACT if mode == "plugin" else MANUAL_ARTIFACT
         record = {"mode": mode, "backend": args.backend or default_backend(), "plugin_eval_available": available,
-                  "model_invoked": invoked, "skill": skill,
+                  "model_invoked": invoked, "force_manual": args.force_manual, "skill": skill,
                   "model": args.model, "runs": args.runs, "in_sample": args.in_sample, "executor": args.executor,
                   "cases": cases, "artifact": artifact.as_posix(), **_input_hashes(ws, skill, cases),
                   "started": _now(), "finished": None}
@@ -590,6 +609,8 @@ def _job_argv(ws: Path, args: argparse.Namespace) -> list[str]:
         argv += ["--skill", args.skill]
     if args.backend:
         argv += ["--backend", args.backend]
+    if args.force_manual:
+        argv += ["--force-manual", args.force_manual]
     if args.in_sample:
         argv.append("--in-sample")
     if args.executor:
@@ -649,9 +670,9 @@ def supervise(ws: Path, args: argparse.Namespace) -> int:
     return rc
 
 
-def record(ws: Path, skill: str | None, backend: str | None) -> int:
+def record(ws: Path, skill: str | None, backend: str | None, force_manual: str | None) -> int:
     try:
-        cases, mode, available, _ = record_cases(ws, resolve_skill(ws, skill), backend)
+        cases, mode, available, _ = record_cases(ws, resolve_skill(ws, skill), backend, force_manual)
     except GateError as exc:
         log_attempt(ws, "record", str(exc))
         print(f"gate: {exc}", file=sys.stderr)
@@ -672,6 +693,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--backend", choices=["plugin", "manual"],
                         help="plugin: claude plugin eval (Claude Code); manual: run-case.sh (default: plugin "
                              "inside Claude Code when it can run, else manual)")
+    parser.add_argument("--force-manual", metavar="'<host>: <reason>'",
+                        help="with --backend manual: run it inside Claude Code on a model-invoked skill plugin eval "
+                             "could run (another host whose shell inherits $CLAUDECODE); logged in gate.json and "
+                             "data-split.yaml")
     parser.add_argument("--model", help="the model the skill targets (pinned for both arms; required unless --stop)")
     parser.add_argument("--runs", type=int, default=REQUIRED_RUNS,
                         help=f"runs per arm per case (default {REQUIRED_RUNS}; check_gate requires {REQUIRED_RUNS})")
@@ -691,10 +716,16 @@ def main(argv: list[str] | None = None) -> int:
                         help="stop the recorded `gate` job, then start a new one detached")
     parser.add_argument("--stop", action="store_true", help="stop the recorded `gate` job and its eval runs")
     args = parser.parse_args(argv)
+    if args.force_manual is not None:
+        host, _, reason = " ".join(args.force_manual.split()).partition(":")
+        if args.backend != "manual" or not host.strip() or not reason.strip():
+            parser.error("--force-manual goes with --backend manual and names the host and why: "
+                         "--force-manual '<host>: <reason>'")
+        args.force_manual = f"{host.strip()}: {reason.strip()}"
     if args.command == "record":
         if args.stop or args.detach or args.restart:
             parser.error("record takes no --stop, --detach or --restart")
-        return record(args.workspace.resolve(), args.skill, args.backend)
+        return record(args.workspace.resolve(), args.skill, args.backend, args.force_manual)
     if args.stop and (args.detach or args.restart):
         parser.error("--stop takes no --detach or --restart")
     if not args.stop and not args.model:
