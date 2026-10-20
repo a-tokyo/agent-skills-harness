@@ -32,7 +32,9 @@ cases only, then every Skill indicator's pass count. On failure it prints `GATE 
 The panel (SKILL.md 5.2-5.3, scripts/panel.py) runs on a valid gate only: --panel checks it before the
 verifiers start; each verifier, after scoring, writes its role receipt with --panel-receipt ROLE SCORES_JSON
 (--synthesis for the synthesis round); --consensus computes the verdict the three receipts allow, by the
-thresholds in references/verdict-rules.json, and prints `PANEL CONSENSUS: ...`.
+thresholds in references/verdict-rules.json, and prints `PANEL CONSENSUS: ...`. Each consensus over a skill
+other than the last one's is a new panel round (panel.py); past `max_panel_rounds` the three refuse to start
+one with `PANEL ROUNDS EXHAUSTED: ...`, and the build ends UNSHIPPED on the last round's consensus.
 
 --finish checks the build's end state instead (SKILL.md 5.1): BENCHMARK.md at the build root has a
 `Verdict: <label>` line naming SHIP, SHIP WITH CAVEATS or UNSHIPPED, and no `gate` job is running. A SHIP or
@@ -42,7 +44,8 @@ and `PANEL CONSENSUS:` lines (whitespace aside); a plain SHIP has no gold delta<
 at SHIP WITH CAVEATS). An UNSHIPPED verdict follows a gate attempt (a `gate` step in
 work/evaluation/gate-attempts.jsonl: a run that started, or a GateError the gate step raised), and carries
 those two lines too whenever the gate validates and a current consensus exists, so the reason stands beside
-the label. It prints `BUILD FINISHED: verdict <label>` or `BUILD UNFINISHED: <reason>`.
+the label; when the panel ran all its rounds and the skill changed since, it carries the last round's line.
+It prints `BUILD FINISHED: verdict <label>` or `BUILD UNFINISHED: <reason>`.
 
     check_gate.py [--workspace DIR] [--skill NAME] [--json]
                   [--panel | --panel-receipt ROLE SCORES_JSON [--synthesis] | --consensus | --finish]
@@ -383,6 +386,11 @@ def finish(workspace: Path, skill: str | None = None) -> tuple[bool, str | None,
     if verdict == "UNSHIPPED" and not _gate_attempted(workspace):
         return False, verdict, (f"UNSHIPPED needs a gate attempt: no gate run or gate-step error is logged in "
                                 f"{GATE_ATTEMPTS}; run 3.6 and 5.0 (a build that does not ship still runs the gate)")
+    last = panel.exhausted(workspace)
+    if last and verdict == "UNSHIPPED" and _spaced(last.get("line") or "") not in _spaced(text):
+        return False, verdict, (f"the panel ran its {panel.rules()['max_panel_rounds']} rounds; {BENCHMARK} lacks the "
+                                f"last round's PANEL CONSENSUS line beside UNSHIPPED; copy it in verbatim: "
+                                f"{last.get('line')}")
     gate = validate(workspace, skill)
     if not gate.valid:
         if verdict == "UNSHIPPED":
@@ -449,8 +457,12 @@ def main(argv: list[str] | None = None) -> int:
             path, result = panel.write_consensus(workspace, verdict.skill, skill_sha)
             print(result.line())
         elif args.panel:
+            panel.check_round(workspace, skill_sha)
             print(f"panel: after scoring, each verifier runs `check_gate.py --panel-receipt <role> <scores.json>` "
                   f"({', '.join(panel.ROLES)}); then `check_gate.py --consensus` (5.3)", file=sys.stderr)
+    except panel.RoundsExhausted as exc:
+        print(f"PANEL ROUNDS EXHAUSTED: {exc}")
+        return 1
     except GateError as exc:
         print(f"PANEL INCOMPLETE: {exc}")
         return 1

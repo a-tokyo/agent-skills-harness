@@ -222,7 +222,8 @@ For each panel member (Verifier-A, Verifier-B, Devil's Advocate):
    e. check_gate.py --consensus again: the convergence test
 4. The PANEL CONSENSUS line names the label and the verdict it allows
 5. If SHIP → output final skill
-6. If ITERATE → structure feedback → return to autoresearch
+6. If ITERATE → structure feedback → return to autoresearch; the fixed skill's panel is a new round,
+   and past max_panel_rounds (verdict-rules.json, 3) check_gate.py refuses one: UNSHIPPED on the last consensus
 7. If BLOCK → highlight blocking dimension → user review
 8. If DA escalation or deadlock → surface to user
 ```

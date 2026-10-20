@@ -13,6 +13,12 @@ thresholds in references/verdict-rules.json (their one home), and writes
 work/experiments/panel/consensus.json with the label it allows BENCHMARK.md to state. check_gate.py
 --finish recomputes it and rejects a verdict above that label.
 
+Each consensus is also archived as a panel round, work/experiments/panel/rounds/<n>/: round.json (the
+skill and rubric hashes, the label and its line, a sha256 per file of output/<skill>/), a copy of SKILL.md
+and the three final receipts. A round is one consensus over a skill hash other than the last round's; a
+re-run on the same skill (after synthesis, or a rubric fix) updates that round. Past `max_panel_rounds`
+(verdict-rules.json) no new round starts: the build ends UNSHIPPED with the last round's consensus line.
+
 rubric.yaml is read by a small stdlib reader of the references/rubric-templates.md schema:
 `target_score:` (default from verdict-rules.json), and a `dimensions:` block list whose items carry
 `name:`, `weight:` and `scale:` ("1-10" when absent).
@@ -23,15 +29,18 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shutil
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
-from gate_common import EVAL_DIR, GateError, _strip_comment, _unquote, file_sha256, write_json
+from gate_common import EVAL_DIR, GateError, _hashed, _strip_comment, _unquote, check_skill_name, file_sha256, \
+    skill_sha256, write_json
 
 RUBRIC = EVAL_DIR / "rubric.yaml"
 PANEL_DIR = PurePosixPath("work") / "experiments" / "panel"
 CONSENSUS = PANEL_DIR / "consensus.json"
+ROUNDS_DIR = PANEL_DIR / "rounds"
 RULES_PATH = Path(__file__).resolve().parent.parent / "references" / "verdict-rules.json"
 DA = "devils-advocate"
 ROLES = ("verifier-a", "verifier-b", DA)
@@ -41,6 +50,10 @@ _LABEL = re.compile(r"[ _]+")
 
 def rules() -> dict:
     return json.loads(RULES_PATH.read_text(encoding="utf-8"))
+
+
+class RoundsExhausted(GateError):
+    """A new panel round past `max_panel_rounds`: the build ends UNSHIPPED on the last round's consensus."""
 
 
 def label(text: object) -> str | None:
@@ -180,6 +193,8 @@ def write_receipt(workspace: Path, role: str, source: Path, skill: str, skill_sh
     """Validate a verifier's scoring JSON against the rubric and write its role receipt."""
     if role not in ROLES:
         raise GateError(f"role {role!r} is not one of {', '.join(ROLES)}")
+    if not synthesis:
+        check_round(workspace, skill_sha)
     rubric = read_rubric(workspace)
     raw = _read(source)
     if raw is None:
@@ -220,6 +235,69 @@ def current_receipts(workspace: Path, skill_sha: str, rubric_sha: str, synthesis
     return found
 
 
+def rounds(workspace: Path) -> list[dict]:
+    """The archived panel rounds, oldest first; round n lives in rounds/<n>/."""
+    found, n = [], 1
+    while (entry := _read(workspace / ROUNDS_DIR / str(n) / "round.json")) is not None:
+        found.append(entry)
+        n += 1
+    return found
+
+
+def panel_round(workspace: Path, skill_sha: str) -> int:
+    """The round a consensus on this skill belongs to: the last round when the skill is unchanged since,
+    else the next one."""
+    archive = rounds(workspace)
+    if archive and archive[-1].get("skill_sha256") == skill_sha:
+        return len(archive)
+    return len(archive) + 1
+
+
+def check_round(workspace: Path, skill_sha: str) -> int:
+    """The round number, or RoundsExhausted when a new round would pass `max_panel_rounds`."""
+    n, cap = panel_round(workspace, skill_sha), rules()["max_panel_rounds"]
+    if n > cap:
+        raise RoundsExhausted(f"the panel ran its {cap} rounds (max_panel_rounds) and the skill changed since round "
+                              f"{n - 1}; no round {n} starts. End the build UNSHIPPED: write `Verdict: UNSHIPPED` "
+                              f"in BENCHMARK.md beside the last round's line: {rounds(workspace)[-1].get('line')}")
+    return n
+
+
+def exhausted(workspace: Path) -> dict | None:
+    """The last round when the panel ran all `max_panel_rounds` and the skill changed since, else None."""
+    archive = rounds(workspace)
+    if len(archive) < rules()["max_panel_rounds"]:
+        return None
+    last = archive[-1]
+    try:
+        current = skill_sha256(workspace, check_skill_name(last.get("skill")))
+    except GateError:
+        return last
+    return None if current == last.get("skill_sha256") else last
+
+
+def _skill_files(workspace: Path, skill: str) -> dict[str, str]:
+    root = workspace / "output" / skill
+    return {p.relative_to(root).as_posix(): file_sha256(p)
+            for p in sorted(root.rglob("*")) if _hashed(p, root)}
+
+
+def _archive(workspace: Path, skill: str, skill_sha: str, rubric_sha: str, result: "Consensus") -> None:
+    """Write (or, on the same skill, rewrite) the round's record, SKILL.md copy and final receipts."""
+    folder = workspace / ROUNDS_DIR / str(result.panel_round)
+    if folder.exists():
+        shutil.rmtree(folder)
+    folder.mkdir(parents=True)
+    shutil.copyfile(workspace / "output" / skill / "SKILL.md", folder / "SKILL.md")
+    for role, receipt in current_receipts(workspace, skill_sha, rubric_sha, synthesis=bool(result.disputed)).items():
+        write_json(folder / f"{role}.json", receipt)
+    write_json(folder / "round.json", {
+        "round": result.panel_round, "skill": skill, "skill_sha256": skill_sha, "rubric_sha256": rubric_sha,
+        "label": result.label, "allowed": result.allowed, "line": result.line(),
+        "files": _skill_files(workspace, skill),
+        "written": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+
+
 def _overall(scores: dict[str, float], rubric: Rubric) -> float:
     return sum(scores[d.name] / d.high * d.weight for d in rubric.dimensions)
 
@@ -257,6 +335,8 @@ class Consensus:
     disputed: list[str] = field(default_factory=list)
     escalate: str | None = None
     rounds: int = 1
+    panel_round: int = 1
+    max_panel_rounds: int = 3
 
     def line(self) -> str:
         overall = "n/a" if self.overall is None else f"{self.overall:.3f}"
@@ -278,8 +358,9 @@ def _resolve(scores: list[float], within: float) -> tuple[float | None, str]:
 
 def compute(workspace: Path, skill_sha: str) -> Consensus:
     """The consensus of the three current receipts; raises GateError naming what is missing, including
-    a synthesis round the first round calls for."""
+    a synthesis round the first round calls for, and RoundsExhausted past `max_panel_rounds`."""
     rubric, r = read_rubric(workspace), rules()
+    panel_n = check_round(workspace, skill_sha)
     first = current_receipts(workspace, skill_sha, rubric.sha256)
     missing = [role for role in ROLES if role not in first]
     if missing:
@@ -295,7 +376,7 @@ def compute(workspace: Path, skill_sha: str) -> Consensus:
                             f"{', '.join(waiting)} still to submit `--panel-receipt <role> <file> --synthesis`")
         final = second
     result = Consensus(label="", allowed="", overall=None, target=rubric.target_score, disputed=disputed,
-                       rounds=2 if disputed else 1)
+                       rounds=2 if disputed else 1, panel_round=panel_n, max_panel_rounds=r["max_panel_rounds"])
     for d in rubric.dimensions:
         scores = [final[role]["scores"][d.name]["score"] for role in ROLES]
         value, how = _resolve(scores, r["agree_within"])
@@ -334,11 +415,13 @@ def receipts_digest(workspace: Path) -> str:
 
 def write_consensus(workspace: Path, skill: str, skill_sha: str) -> tuple[Path, Consensus]:
     result = compute(workspace, skill_sha)
+    rubric_sha = read_rubric(workspace).sha256
     path = workspace / CONSENSUS
-    write_json(path, {"skill": skill, "skill_sha256": skill_sha, "rubric_sha256": read_rubric(workspace).sha256,
+    write_json(path, {"skill": skill, "skill_sha256": skill_sha, "rubric_sha256": rubric_sha,
                       "receipts_sha256": receipts_digest(workspace), "line": result.line(),
                       **asdict(result),
                       "written": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+    _archive(workspace, skill, skill_sha, rubric_sha, result)
     return path, result
 
 

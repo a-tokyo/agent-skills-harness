@@ -1789,6 +1789,65 @@ class PanelTest(TempWorkspace):
         self.assertIn("PANEL CONSENSUS: ESCALATE (allows UNSHIPPED); overall=n/a", line)
         self.assertIn("deadlocked: correctness", line)
 
+    ITERATE_PANEL = {"verifier-a": (5, 5), "verifier-b": (5, 6), "devils-advocate": (5, 5)}
+
+    def fix_and_regate(self, n: int) -> None:
+        (self.ws / "output" / "demo" / "SKILL.md").write_text(f"---\nname: demo\ndescription: Fix {n}.\n---\n# Demo\n")
+        self.gate()
+
+    def finish(self, text: str) -> dict:
+        (self.ws / "BENCHMARK.md").write_text(text)
+        return json.loads(self.run_script("check_gate.py", "--finish", "--json").stdout)
+
+    def test_a_round_is_a_consensus_over_a_new_skill_and_the_cap_ends_the_build(self) -> None:
+        self.gate()
+        lines = []
+        for n in (1, 2, 3):
+            if n > 1:
+                self.fix_and_regate(n)
+            line = self.run_panel(self.ITERATE_PANEL)
+            self.assertIn("PANEL CONSENSUS: ITERATE (allows UNSHIPPED)", line)
+            consensus = json.loads((self.ws / "work" / "experiments" / "panel" / "consensus.json").read_text())
+            self.assertEqual((consensus["panel_round"], consensus["max_panel_rounds"]), (n, 3))
+            lines.append(line)
+        self.assertEqual(self.run_panel(self.ITERATE_PANEL), lines[-1], "a re-run on the same skill is the same round")
+        rounds = self.ws / "work" / "experiments" / "panel" / "rounds"
+        self.assertEqual(sorted(p.name for p in rounds.iterdir()), ["1", "2", "3"])
+        record = json.loads((rounds / "2" / "round.json").read_text())
+        self.assertEqual((record["round"], record["label"], record["line"]), (2, "ITERATE", lines[1]))
+        self.assertEqual(set(record["files"]), {"SKILL.md"})
+        self.assertIn("Fix 2.", (rounds / "2" / "SKILL.md").read_text())
+        self.assertEqual(sorted(p.name for p in (rounds / "3").iterdir()),
+                         ["SKILL.md", "devils-advocate.json", "round.json", "verifier-a.json", "verifier-b.json"])
+        self.fix_and_regate(4)
+        for out in (self.run_script("check_gate.py", "--panel"), self.receipt("verifier-a", 9, 9), self.consensus()):
+            self.assertEqual(out.returncode, 1, out.stdout)
+            self.assertIn("PANEL ROUNDS EXHAUSTED: the panel ran its 3 rounds", out.stdout)
+            self.assertIn(f"write `Verdict: UNSHIPPED` in BENCHMARK.md beside the last round's line: {lines[-1]}",
+                          out.stdout)
+        gate_line = self.run_script("check_gate.py").stdout.strip()
+        data = self.finish(f"Verdict: UNSHIPPED\n\n{gate_line}\n")
+        self.assertFalse(data["finished"])
+        self.assertIn("lacks the last round's PANEL CONSENSUS line", data["reason"])
+        self.assertIn("needs the panel's consensus on this skill: the panel ran its 3 rounds", self.finish(f"Verdict: SHIP WITH CAVEATS\n\n{gate_line}\n{lines[-1]}\n")
+                      ["reason"], "no SHIP on a skill the capped panel never scored")
+        self.assertEqual(self.finish(f"Verdict: UNSHIPPED\n\n{gate_line}\n{lines[-1]}\n"),
+                         {"finished": True, "verdict": "UNSHIPPED", "reason": "ok"})
+
+    def test_a_ship_on_the_last_round_still_ships(self) -> None:
+        self.gate()
+        for n in (1, 2):
+            if n > 1:
+                self.fix_and_regate(n)
+            self.run_panel(self.ITERATE_PANEL)
+        self.fix_and_regate(3)
+        line = self.run_panel({"verifier-a": (9, 9), "verifier-b": (9, 8), "devils-advocate": (8, 8)})
+        self.assertIn("PANEL CONSENSUS: SHIP (allows SHIP)", line)
+        self.assertEqual(json.loads((self.ws / "work" / "experiments" / "panel" / "rounds" / "3" / "round.json")
+                                    .read_text())["line"], line)
+        gate_line = self.run_script("check_gate.py").stdout.strip()
+        self.assertTrue(self.finish(f"Verdict: SHIP\n\n{gate_line}\n{line}\n")["finished"])
+
     def test_the_thresholds_come_from_verdict_rules(self) -> None:
         rules = json.loads((SCRIPTS.parent / "references" / "verdict-rules.json").read_text())
         self.assertEqual((rules["caveat_margin"], rules["block_below"]), (0.10, 3))

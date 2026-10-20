@@ -5,6 +5,7 @@
   "block_below": 3,
   "block_majority": 2,
   "agree_within": 1,
+  "max_panel_rounds": 3,
   "synthesis_triggers": {
     "spread_at_least": 2,
     "devils_advocate_at": 1,

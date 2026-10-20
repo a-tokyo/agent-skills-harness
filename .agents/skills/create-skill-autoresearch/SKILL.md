@@ -437,8 +437,8 @@ If ITERATE: turn each member's top concern and every Devil's Advocate failure sc
 improvement hypothesis in `autoresearch.ideas.md`, log the panel scores and rationales in
 `work/experiments/craft-decisions.md`, and return to Phase 4.
 
-**A terminal ITERATE is `UNSHIPPED`.** ITERATE or BLOCK with no Phase 4 budget left, or after the 4.3 plateau
-rule ended the loop, ends the build: write `BENCHMARK.md` with `Verdict: UNSHIPPED` — the one terminal label —
+**A terminal ITERATE is `UNSHIPPED`.** ITERATE or BLOCK with no Phase 4 budget left, after the 4.3 plateau rule, or at
+`max_panel_rounds` (3; `check_gate.py` refuses round 4) ends the build: write `Verdict: UNSHIPPED` in `BENCHMARK.md`,
 plus the final scores, the blocking concerns and the two lines below when they exist (`--finish` asks for them). An
 `UNSHIPPED` output is a draft: never describe it as shipped, and never publish it.
 
