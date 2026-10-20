@@ -142,7 +142,7 @@ Subdirectories:
 - `evaluation/` — the scoring infrastructure: `rubric.yaml` (dimensions, weights, criteria, and the exit criteria `target_score`/`max_iterations`/`plateau_window`), `evaluate.sh` (the script autoresearch calls), the optional `evaluate-checks.sh` correctness gate, `judges.yaml` (judge models and weights — names only, never a credential), and `data-split.yaml` (which gold standards are training vs held out).
   Phase 3.6 adds `run-case.sh`, and Phase 5.0 writes the gate artifacts through the factory's bundled
   scripts — never by hand: `scripts/gate.py` (run as the owned job `gate`, started with `--detach` and
-  polled with `run_owned.py wait gate`) picks the mode, runs the suite and writes `gate.json` plus
+  awaited with `gate.py --wait`) picks the mode, runs the suite and writes `gate.json` plus
   `plugin-eval.json` or `uplift.json`; `scripts/check_gate.py` exits non-zero unless `gate.json` records a
   finished run whose hashes (skill, cases, `run-case.sh`, the scorer and fixture files under `input/` and
   `evaluation/`, the artifact) still match, at least one case is a gold case with a numeric delta, and that

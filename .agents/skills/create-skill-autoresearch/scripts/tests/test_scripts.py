@@ -963,7 +963,7 @@ class GateLifecycleTest(TempWorkspace):
     def detach(self, ws: Path | None = None) -> dict:
         out = self.run_script("gate.py", "--detach", "--model", "m", ws=ws, FAKE_MODE="hang")
         self.assertEqual(out.returncode, 0, out.stderr)
-        self.assertIn("wait gate --timeout 540", out.stderr)
+        self.assertRegex(out.stderr, r"gate\.py --workspace \S+ --wait")
         self.assertTrue(_until(lambda: ((ws or self.ws) / "work" / "pids" / "gate-plugin-eval.json").is_file()))
         return self.record("gate", ws)
 
@@ -977,7 +977,7 @@ class GateLifecycleTest(TempWorkspace):
             out = self.run_script("gate.py", "--model", "m", FAKE_MODE="hang")
             self.assertEqual(out.returncode, 3)
             self.assertIn("already running", out.stderr)
-            self.assertIn("wait gate --timeout 540", out.stderr)
+            self.assertRegex(out.stderr, r"gate\.py --workspace \S+ --wait")
             self.assertIn("--restart", out.stderr)
             self.assertEqual(self.record("gate")["pid"], gate["pid"], "the running gate's record is untouched")
             poll = self.run_script("run_owned.py", "wait", "gate", "--timeout", "0.2")
@@ -1068,6 +1068,42 @@ class GateLifecycleTest(TempWorkspace):
             self.assertEqual(self.record("gate")["pid"], gate["pid"])
         finally:
             self.stop()
+
+    def test_wait_blocks_then_prints_one_progress_line_and_exits_124(self) -> None:
+        self.make_build(self.CASES)
+        self.detach()
+        try:
+            started = time.monotonic()
+            out = self.run_script("gate.py", "--wait", "--wait-timeout", "1")
+            self.assertGreaterEqual(time.monotonic() - started, 1)
+            self.assertEqual(out.returncode, 124, out.stderr)
+            self.assertEqual(len(out.stderr.strip().splitlines()), 1, out.stderr)
+            self.assertIn("still running after", out.stderr)
+            self.assertIn("call --wait again", out.stderr)
+            self.assertEqual(out.stdout, "")
+        finally:
+            self.stop()
+
+    def test_wait_returns_the_gate_exit_code_and_its_log(self) -> None:
+        self.make_build(["input-01"], invoked=False)
+        self.write_adapter()
+        out = self.run_script("gate.py", "--detach", "--wait", "--model", "m", "--executor", "single-call")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("GATE VALID", out.stdout)
+        again = self.run_script("gate.py", "--wait", "--wait-timeout", "1")
+        self.assertEqual(again.returncode, 0, "a finished gate returns its exit code at once")
+        self.assertIn("GATE VALID", again.stdout)
+        self.write_adapter(SCORING_ADAPTER.replace('echo "EXECUTOR=$GATE_EXECUTOR"', ""))
+        out = self.run_script("gate.py", "--detach", "--wait", "--model", "m", "--executor", "single-call")
+        self.assertEqual(out.returncode, 1, out.stdout + out.stderr)
+        self.assertIn("GATE INVALID", out.stdout)
+
+    def test_wait_without_a_gate_or_with_bad_options(self) -> None:
+        out = self.run_script("gate.py", "--wait")
+        self.assertEqual(out.returncode, 3)
+        self.assertIn("no `gate` job is recorded", out.stderr)
+        for args in (["--wait", "--stop"], ["--wait", "--wait-timeout", "0"], ["record", "--wait"]):
+            self.assertEqual(self.run_script("gate.py", *args).returncode, 2, args)
 
     def test_stop_without_a_gate_is_a_no_op(self) -> None:
         out = self.run_script("gate.py", "--stop")

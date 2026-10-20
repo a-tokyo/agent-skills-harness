@@ -344,13 +344,13 @@ no trigger rate was measured.
 
 ### 5.0 Eval Gate
 
-A full gate runs longer than one shell call waits, so start it detached from the workspace root, then
-poll it with short calls until it exits (`wait` exits 124 while it runs, then with the gate's exit code):
+A full gate runs longer than one shell call waits, so start it detached from the workspace root, then block
+on it with `--wait` (exit 124: still running — call `--wait` again, never poll `run_owned.py status`):
 
 ```bash
 python3 <skill-dir>/scripts/gate.py --detach --model <model the skill targets> [--in-sample] \
   [--allow-tools Bash Write] [--executor single-call|agentic]
-python3 <skill-dir>/scripts/run_owned.py wait gate --timeout 540    # repeat until it exits
+python3 <skill-dir>/scripts/gate.py --wait    # blocks up to 540 s; repeat on 124, else it exits with the gate's code
 ```
 
 `gate.py` runs as the owned job `gate`, as `run_owned.py start gate -- python3 <skill-dir>/scripts/gate.py …`

@@ -3,12 +3,19 @@
 
 The gate runs as the owned job `gate` (run_owned.py; record and log in work/pids/), whether you
 start it with this script or with `run_owned.py start gate -- python3 gate.py ...`. A full gate can
-take over an hour, longer than an agent's shell call waits, so start it detached and poll:
+take over an hour, longer than an agent's shell call waits, so start it detached, then block on it:
 
-    gate.py --detach --model <model> [options]          # starts the job, prints how to poll
-    run_owned.py wait gate --timeout 540                # repeat until it exits; its exit code is the gate's
+    gate.py --detach --model <model> [options]          # starts the job, prints how to wait for it
+    gate.py --wait [--wait-timeout 540]                 # blocks; 124 = still running: call --wait again
     gate.py --restart --model <model> [options]         # stops only the recorded `gate` group, starts it detached
     gate.py --stop                                      # stops it (and the eval runs it started)
+
+--wait blocks on the recorded `gate` job for up to --wait-timeout seconds (default 540, under the 600 s a
+Claude Code shell call may wait) and never starts one; with --detach or --restart it starts the gate first,
+then blocks. When the gate has finished it prints the gate's log and exits with the gate's exit code (an
+already finished gate returns at once). At the timeout it prints one progress line (elapsed time and the
+log's last line) and exits 124: call --wait again rather than polling `run_owned.py status`. Exit 3: no
+`gate` job is recorded; 125: the job ended without recording an exit status.
 
 Without --detach it starts the job and waits for it (for humans at a terminal). If that call is cut
 off, the job keeps running. A second start while a `gate` job is live is refused. --detach and
@@ -70,7 +77,8 @@ default Git install; WSL's bash.exe is skipped). Tested on macOS, Linux and Wind
 
 Exit codes: 0 complete and valid (--detach, --restart, --stop: started or stopped); 1 the gate ran but the artifact is
 missing, partial or invalid (the message says why); 2 usage error; 3 a precondition is missing
-(suite, cases, run-case.sh) or a `gate` job is already running; 143 the gate was stopped.
+(suite, cases, run-case.sh), a `gate` job is already running, or (--wait) none is recorded; 124 (--wait) still
+running at --wait-timeout; 125 (--wait) the job ended without an exit status; 143 the gate was stopped.
 """
 
 from __future__ import annotations
@@ -114,9 +122,9 @@ POLL_SECONDS = 0.5
 STOP_GRACE = 30
 # An eval run's time to exit after TERM before KILL; a run being stopped only needs to flush its log.
 CHILD_GRACE = 10
-# The suggested `run_owned.py wait` timeout: under the 600 s a Claude Code Bash call may wait, so a poll
-# returns (exit 124) before the host cuts the call off.
-WAIT_HINT_SECONDS = 540
+# The default --wait timeout: under the 600 s a Claude Code Bash call may wait, so --wait returns
+# (exit 124) before the host cuts the call off.
+WAIT_SECONDS = 540
 SCORE_RE = re.compile(r"^SCORE=(\S+)\s*$", re.MULTILINE)
 EXECUTOR_RE = re.compile(r"^EXECUTOR=(\S+)\s*$", re.MULTILINE)
 # Plugin eval runs Claude models only; a model id naming none of these is likely another host's.
@@ -659,7 +667,45 @@ PYTHON = f'"{sys.executable}"' if os.name == "nt" else "python3"
 
 
 def _wait_hint(ws: Path) -> str:
-    return f"{PYTHON} {SCRIPTS / 'run_owned.py'} --workspace {ws} wait {JOB} --timeout {WAIT_HINT_SECONDS}"
+    return f"{PYTHON} {SCRIPTS / 'gate.py'} --workspace {ws} --wait"
+
+
+def _elapsed(started: str) -> str:
+    try:
+        seconds = int((datetime.now(timezone.utc) - datetime.fromisoformat(started)).total_seconds())
+    except (TypeError, ValueError):
+        return "an unknown time"
+    return f"{seconds // 3600}h{seconds // 60 % 60:02d}m" if seconds >= 3600 else f"{seconds // 60}m{seconds % 60:02d}s"
+
+
+def _last_line(log: str) -> str:
+    try:
+        lines = [line for line in Path(log).read_text(encoding="utf-8", errors="replace").splitlines() if line.strip()]
+    except OSError:
+        return ""
+    return lines[-1].strip() if lines else ""
+
+
+def wait_gate(ws: Path, timeout: float, proc: subprocess.Popen | None = None) -> int:
+    """Block on the recorded `gate` job for up to `timeout` seconds. Finished: print its log, return its exit
+    code. Still running: print one progress line, return 124. No job recorded: 3."""
+    sdir = run_owned.state_dir(ws)
+    try:
+        rec = run_owned.load(sdir, JOB)
+    except run_owned.OwnedError:
+        print(f"gate: no `{JOB}` job is recorded; start one with {PYTHON} {SCRIPTS / 'gate.py'} --detach "
+              "--model <model> [options]", file=sys.stderr)
+        return EXIT_PRECONDITION
+    rc = run_owned.wait(sdir, JOB, timeout=timeout, proc=proc)
+    if rc == run_owned.EXIT_TIMEOUT:
+        last = _last_line(rec.log)
+        print(f"gate: still running after {_elapsed(rec.started)}{f' (last: {last})' if last else ''}; call --wait "
+              f"again (exit 124), not run_owned.py status: {_wait_hint(ws)}", file=sys.stderr)
+        return rc
+    sys.stdout.write(Path(rec.log).read_text(encoding="utf-8", errors="replace"))
+    if rc == run_owned.EXIT_NO_STATUS:
+        print(f"gate: the `{JOB}` job ended without recording an exit status; see {rec.log}", file=sys.stderr)
+    return rc
 
 
 def _stop(sdir: Path) -> int:
@@ -676,7 +722,7 @@ def supervise(ws: Path, args: argparse.Namespace) -> int:
     live = _running(sdir)
     if live and not args.restart:
         print(f"gate: a `{JOB}` job is already running (pgid {live['pgid']}, log {live['log']}).\n"
-              f"  poll it:   {_wait_hint(ws)}\n"
+              f"  wait:      {_wait_hint(ws)}\n"
               f"  restart:   {PYTHON} {SCRIPTS / 'gate.py'} --restart <the same options>", file=sys.stderr)
         return EXIT_PRECONDITION
     try:
@@ -694,8 +740,11 @@ def supervise(ws: Path, args: argparse.Namespace) -> int:
     rec = run_owned.load(sdir, JOB)
     log = rec.log
     print(f"gate: started as owned job `{JOB}` (pgid {rec.pgid}); log {log}", file=sys.stderr)
+    if args.wait:
+        return wait_gate(ws, args.wait_timeout, proc)
     if args.detach or args.restart:
-        print(f"gate: poll until it exits (its exit code is the gate's):\n  {_wait_hint(ws)}", file=sys.stderr)
+        print(f"gate: block until it exits (its exit code is the gate's; 124: call it again):\n  {_wait_hint(ws)}",
+              file=sys.stderr)
         return 0
     print(f"gate: waiting; if this call is cut off the gate keeps running: {_wait_hint(ws)}", file=sys.stderr)
     try:
@@ -751,10 +800,16 @@ def main(argv: list[str] | None = None) -> int:
                         help=f"plugin mode: seconds for the whole eval (default {EVAL_TIMEOUT})")
     parser.add_argument("--case-timeout", type=float, default=CASE_TIMEOUT,
                         help=f"manual mode: seconds per run (default {CASE_TIMEOUT})")
-    parser.add_argument("--detach", action="store_true", help="start the `gate` job and return; poll with run_owned.py wait")
+    parser.add_argument("--detach", action="store_true", help="start the `gate` job and return; then block with --wait")
     parser.add_argument("--restart", action="store_true",
                         help="stop the recorded `gate` job, then start a new one detached")
     parser.add_argument("--stop", action="store_true", help="stop the recorded `gate` job and its eval runs")
+    parser.add_argument("--wait", action="store_true",
+                        help="block on the recorded `gate` job (after starting it, with --detach or --restart); "
+                             "exit 124 while it still runs: call --wait again")
+    parser.add_argument("--wait-timeout", type=float, default=WAIT_SECONDS,
+                        help=f"--wait: seconds to block before exiting 124 (default {WAIT_SECONDS}, under a "
+                             "600 s shell-call limit)")
     args = parser.parse_args(argv)
     if args.force_manual is not None:
         host, _, reason = " ".join(args.force_manual.split()).partition(":")
@@ -763,13 +818,16 @@ def main(argv: list[str] | None = None) -> int:
                          "--force-manual '<host>: <reason>'")
         args.force_manual = f"{host.strip()}: {reason.strip()}"
     if args.command == "record":
-        if args.stop or args.detach or args.restart:
-            parser.error("record takes no --stop, --detach or --restart")
+        if args.stop or args.detach or args.restart or args.wait:
+            parser.error("record takes no --stop, --detach, --restart or --wait")
         return record(args.workspace.resolve(), args.skill, args.backend, args.force_manual)
-    if args.stop and (args.detach or args.restart):
-        parser.error("--stop takes no --detach or --restart")
-    if not args.stop and not args.model:
-        parser.error("--model is required (except with --stop)")
+    if args.stop and (args.detach or args.restart or args.wait):
+        parser.error("--stop takes no --detach, --restart or --wait")
+    if args.wait_timeout <= 0:
+        parser.error("--wait-timeout must be > 0")
+    bare_wait = args.wait and not (args.detach or args.restart)
+    if not (args.stop or bare_wait) and not args.model:
+        parser.error("--model is required (except with --stop or a bare --wait)")
     if args.runs < 1 or not 1 <= args.jobs <= 8:
         parser.error("--runs must be >= 1 and --jobs 1-8")
 
@@ -777,6 +835,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.stop:
             return _stop(run_owned.state_dir(ws))
+        if bare_wait:
+            return wait_gate(ws, args.wait_timeout)
         if _inside_gate_job(ws):
             return run_gate(ws, args)
         return supervise(ws, args)
