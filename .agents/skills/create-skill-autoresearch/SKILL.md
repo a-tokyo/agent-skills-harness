@@ -107,7 +107,7 @@ conflict with the gold evidence, and before the 3.5 baseline confirm the draft f
 
 Based on research, draft `work/evaluation/rubric.yaml` from [references/rubric-templates.md](references/rubric-templates.md):
 5-10 weighted dimensions on a 1-10 scale, plus `target_score` (default 0.85), `max_iterations` (default
-20) and `plateau_window` (default 5).
+20) and `plateau_window` (default 2).
 
 Always include these universal dimensions (adjust weights per domain):
 - **correctness**: Instructions are technically accurate and executable
@@ -199,9 +199,9 @@ Multi-judge scoring across model families (`judges.yaml`) and optional `evaluate
 
 ### 3.5 Measure Baseline
 
-Run `evaluate.sh` with the initial draft, record the scores as experiment 0, and report them to the user.
-Commit the draft as experiment 0 before Phase 4 (`git add output/<skill-name> && git commit -m "baseline"`):
-upstream autoresearch never commits one, and its `git reset --hard HEAD~1` needs that parent.
+Run `evaluate.sh` on the draft, commit it (`git add output/<skill-name> && git commit -m "baseline"`; upstream autoresearch
+never commits one, and its `git reset --hard HEAD~1` needs that parent), log experiment 0 in `autoresearch.jsonl` (4.1), report it.
+**Fast path:** at `target_score`, run 3.6 and 5.0 next; `check_gate.py --fast-path` exit 0 skips 4.1-4.6 (5.1-5.4 still run).
 
 ### 3.6 Scaffold the Eval Suite
 
@@ -303,8 +303,8 @@ Seed `autoresearch.ideas.md` before the first experiment with:
 **Ending the loop is the factory's call, not the loop's.** Upstream treats a plateau as advisory, so an
 unreachable `target_score` burns the whole budget and reports "exit criteria not met". Override that:
 
-- **A confidence-qualified plateau is terminal.** If the plateau sits within judge variance (~0.2-0.3 on
-  a 1-10 scale, below which gains are not measurable), stop and carry best-so-far into Phase 5.
+- **A plateau is terminal.** `plateau_window` (default 2) consecutive experiments within the noise threshold (judge
+  variance, ~0.2-0.3 on a 1-10 scale, below which gains are not measurable) end the loop: carry best-so-far into Phase 5.
 - **Below target is a verdict, not a failure** -- Phase 5.4 grades it (SHIP WITH CAVEATS within
   `caveat_margin` of `target_score`). Honour `baseline_lock` in `state.yaml` the same way, logging the real target
   in the ideas backlog.

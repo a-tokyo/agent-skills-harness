@@ -1877,6 +1877,56 @@ class PanelTest(TempWorkspace):
                       line, "rubric.yaml's target_score, minus caveat_margin, sets the band")
 
 
+class FastPathTest(TempWorkspace):
+    def fast_path(self) -> str:
+        out = self.run_script("check_gate.py", "--fast-path")
+        self.assertEqual(out.returncode, 0 if out.stdout.startswith("FAST PATH:") else 1, out.stdout + out.stderr)
+        return out.stdout.strip()
+
+    def log(self, *experiments: dict, where: str = "work/experiments") -> None:
+        path = self.ws / where / "autoresearch.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("".join(json.dumps(e) + "\n" for e in experiments))
+
+    def build(self, cases: list[str]) -> None:
+        self.make_build(cases)
+        self.write_rubric(target=0.85)
+
+    def test_a_baseline_at_target_with_uplift_everywhere_skips_phase_4(self) -> None:
+        self.build(["gold-01", "trigger-1"])
+        self.assertIn("NO FAST PATH: the gate does not validate", self.fast_path())
+        self.assertEqual(self.run_script("gate.py", "--model", "m").returncode, 0)
+        self.assertIn("NO FAST PATH: no experiment 0 in autoresearch.jsonl", self.fast_path())
+        self.log({"experiment": 0, "commit": "", "metric": 0.84, "status": "baseline"})
+        self.assertEqual(self.fast_path(), "NO FAST PATH: baseline overall_score 0.840 is below target_score 0.85")
+        self.log({"type": "validation_check", "experiment": 3}, {"experiment": 0, "metric": 0.85}, where=".")
+        self.assertEqual(self.fast_path(), "FAST PATH: baseline overall_score 0.850 >= target_score 0.85 and every "
+                                           "gold delta > 0 (mean +0.500); skip the Phase 4 loop (4.1-4.6) and "
+                                           "continue at 5.1", "the root log wins; a validation check is no experiment")
+        self.log({"experiment": 0, "metric": 0.9}, {"experiment": 1, "metric": 0.92}, where=".")
+        self.assertIn("NO FAST PATH: Phase 4 already logged 1 experiment(s)", self.fast_path())
+
+    def test_a_gold_delta_at_or_below_zero_needs_phase_4(self) -> None:
+        self.build(["gold-01", "trigout-2"])
+        self.assertEqual(self.run_script("gate.py", "--model", "m").returncode, 0)
+        self.log({"experiment": 0, "metric": 0.95})
+        self.assertEqual(self.fast_path(), "NO FAST PATH: gold delta<=0 on trigout-2")
+
+    def test_a_skill_changed_since_the_baseline_commit_needs_phase_4(self) -> None:
+        self.build(["gold-01"])
+        git = ["git", "-C", str(self.ws), "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]
+        subprocess.run([*git, "init", "-q"], check=True)
+        subprocess.run([*git, "add", "output"], check=True)
+        subprocess.run([*git, "commit", "-q", "-m", "baseline"], check=True)
+        commit = subprocess.run([*git, "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+        self.log({"experiment": 0, "commit": commit, "metric": 0.9})
+        self.assertEqual(self.run_script("gate.py", "--model", "m").returncode, 0)
+        self.assertTrue(self.fast_path().startswith("FAST PATH:"))
+        (self.ws / "output" / "demo" / "SKILL.md").write_text("---\nname: demo\ndescription: Edited.\n---\n")
+        self.assertEqual(self.run_script("gate.py", "--model", "m").returncode, 0)
+        self.assertEqual(self.fast_path(), f"NO FAST PATH: output/demo/ changed since experiment 0 (commit {commit})")
+
+
 SECTIONED_SKILL = textwrap.dedent("""\
     ---
     name: demo
