@@ -402,7 +402,7 @@ def finish(workspace: Path, skill: str | None = None) -> tuple[bool, str | None,
     if verdict == "SHIP" and gate.non_positive:
         return False, verdict, (f"gold delta<=0 on {', '.join(gate.non_positive)} caps the verdict at SHIP WITH "
                                 "CAVEATS (5.4); write that, with why the case cannot benefit")
-    consensus, why = panel.recorded(workspace, skill_sha256(workspace, gate.skill))
+    consensus, why = panel.recorded(workspace, gate.skill, skill_sha256(workspace, gate.skill))
     if consensus is None:
         if verdict == "UNSHIPPED":
             return True, verdict, "ok"
@@ -457,7 +457,14 @@ def main(argv: list[str] | None = None) -> int:
             path, result = panel.write_consensus(workspace, verdict.skill, skill_sha)
             print(result.line())
         elif args.panel:
-            panel.check_round(workspace, skill_sha)
+            n = panel.check_round(workspace, skill_sha)
+            try:
+                scope, why = panel.recheck_scope(workspace, verdict.skill, skill_sha, panel.read_rubric(workspace))
+            except GateError as exc:
+                scope, why = None, str(exc)
+            print(f"PANEL ROUND {n}: " + (f"scoped re-check: each role scores only {', '.join(scope.rescored)}; "
+                                          f"{', '.join(scope.carried)} carry forward from round {scope.from_round}"
+                                          if scope else f"full: each role scores every dimension ({why})"))
             print(f"panel: after scoring, each verifier runs `check_gate.py --panel-receipt <role> <scores.json>` "
                   f"({', '.join(panel.ROLES)}); then `check_gate.py --consensus` (5.3)", file=sys.stderr)
     except panel.RoundsExhausted as exc:
