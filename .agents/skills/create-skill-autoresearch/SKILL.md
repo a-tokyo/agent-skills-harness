@@ -384,8 +384,8 @@ python3 <skill-dir>/scripts/check_gate.py --panel                               
 python3 <skill-dir>/scripts/check_gate.py --panel-receipt <role> <scores.json>   # each verifier, after it scores
 ```
 
-Then spawn 3 independent verifier subagents **in parallel**. Each receives ONLY the skill SKILL.md and
-references, the gold standards, the rubric, and the premortem risks -- never research notes, experiment
+Then spawn 3 independent verifier subagents **in parallel**. Each receives ONLY the skill's SKILL.md (a reference file only when it
+asks for one by name), the gold standards, the rubric, and the premortem risks -- never research notes, experiment
 logs (`autoresearch.jsonl`), or builder context.
 
 | Role | Focus | Bias |

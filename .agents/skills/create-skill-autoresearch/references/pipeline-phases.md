@@ -655,7 +655,7 @@ Assess STRUCTURAL QUALITY: correctness, completeness, clarity, spec adherence.
 - You have NOT seen any other evaluator's scores or the building process
 
 ## Input
-- Skill: {{skill_content}}
+- Skill: {{skill_md}} (its SKILL.md only; open a file under {{skill_dir}} by name only when a line you score points to it)
 - Gold standards: {{gold_standards}}
 - Rubric: {{rubric}}
 - Premortem risks: {{premortem_risks}}
@@ -689,7 +689,7 @@ real-world usability, edge cases, integration quality, developer experience.
 - Would an agent struggle to follow these instructions?
 
 ## Input
-- Skill: {{skill_content}}
+- Skill: {{skill_md}} (its SKILL.md only; open a file under {{skill_dir}} by name only when a line you score points to it)
 - Gold standards: {{gold_standards}}
 - Rubric: {{rubric}}
 - Premortem risks: {{premortem_risks}}
@@ -736,7 +736,7 @@ Write "ESCALATE: <reason>" if you identify a concern that:
 - You can describe a specific failure scenario others cannot rebut
 
 ## Input
-- Skill: {{skill_content}}
+- Skill: {{skill_md}} (its SKILL.md only; open a file under {{skill_dir}} by name only when a line you score points to it)
 - Gold standards: {{gold_standards}}
 - Rubric: {{rubric}}
 - Premortem risks: {{premortem_risks}}
