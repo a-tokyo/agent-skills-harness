@@ -360,7 +360,7 @@ would (log `work/pids/gate.log`), and refuses a second start while it runs. To r
 or `uplift.json` plus `gate.json` (hashes of skill, cases, scorers, fixtures, artifact) under `work/evaluation/`. Grant only the tools
 the skill needs. With 3-9 gold standards pass `--in-sample` (gate cases are training cases; `BENCHMARK.md` and
 the panel label Δ in-sample). A non-zero exit says why: fix the suite or `run-case.sh` and re-run; only
-`gate.py` writes the artifact. Every file under `work/evaluation/` is a gate input, so keep scratch and logs (saved
+`gate.py` writes the artifact. Every file under `work/evaluation/` (bar the gate's no-skill-arm `baseline-cache/`) is a gate input, so keep scratch and logs (saved
 `check_gate.py` output included) under `work/experiments/`. Plugin-eval flags: [references/pipeline-phases.md](references/pipeline-phases.md).
 
 Read WITH, W/OUT and Δ per case from the artifact; the verdict comes from Δ, the same-model uplift the shipping evidence needs ([references/benchmark-standard.md](references/benchmark-standard.md)):

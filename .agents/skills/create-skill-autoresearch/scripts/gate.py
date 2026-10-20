@@ -43,7 +43,12 @@ Each eval run goes in its own owned process group, stopped on timeout.
   manual  call work/evaluation/run-case.sh <case> <with|without> --runs times per arm per case;
           it prints EXECUTOR=$GATE_EXECUTOR and SCORE=<0..1> (the last of each counts; a run without the
           --executor it was given fails) -> work/evaluation/uplift.json
-          (a failed run is retried once; a second failure leaves the artifact partial)
+          (a failed run is retried once; a second failure leaves the artifact partial). A complete
+          without-skill arm is cached in work/evaluation/baseline-cache/<key>.json, the key a sha256 of the
+          case, model, executor, run-case.sh, the case's suite directory and every gate input (not the
+          skill, which the bare arm never reads); a later gate reuses it, recording the key and file hash
+          per case in uplift.json for check_gate.py, unless --fresh-baseline. Plugin mode caches nothing:
+          `claude plugin eval --ablation` offers none | with-without, no without-only arm.
 
 At the start it records the mode, the probe's exit code and sha256 hashes of output/<skill>/, the case set,
 the data-split.yaml splits, run-case.sh and the scorer and fixture files (gate_common.inputs_sha256) in
@@ -55,7 +60,7 @@ check_gate.py, and writes nothing outside work/evaluation/ and work/pids/.
 
     gate.py --model <model> [--workspace DIR] [--skill NAME] [--backend plugin|manual [--force-manual REASON]]
             [--runs 3] [--jobs 4]
-            [--allow-tools Bash Write] [--in-sample] [--executor single-call|agentic]
+            [--allow-tools Bash Write] [--in-sample] [--executor single-call|agentic] [--fresh-baseline]
             [--timeout 5400] [--case-timeout 1200] [--detach] [--restart]
     gate.py --stop [--workspace DIR]
 
@@ -71,6 +76,7 @@ missing, partial or invalid (the message says why); 2 usage error; 3 a precondit
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -90,9 +96,9 @@ sys.dont_write_bytecode = True
 import check_gate  # noqa: E402  (sibling imports after disabling bytecode)
 import run_owned  # noqa: E402
 from gate_common import (  # noqa: E402
-    DATA_SPLIT, GATE_RECORD, MANUAL_ARTIFACT, PLUGIN_ARTIFACT, PLUGIN_DIR, REQUIRED_RUNS, RUN_CASE,
-    GateError, cases_sha256, check_skill_name, file_sha256, inputs_sha256, model_invoked, omitted_gold,
-    read_data_split, resolve_skill,
+    BASELINE_CACHE, DATA_SPLIT, GATE_RECORD, MANUAL_ARTIFACT, PLUGIN_ARTIFACT, PLUGIN_DIR, REQUIRED_RUNS, RUN_CASE,
+    GateError, baseline_key, baseline_path, cases_sha256, check_skill_name, file_sha256, inputs_sha256,
+    model_invoked, omitted_gold, read_baseline, read_data_split, resolve_skill,
     log_attempt, skill_sha256, split_sha256, utf8_stdio, write_gate_cases, write_json,
 )
 
@@ -471,9 +477,21 @@ def _one_run(ws: Path, idx: int, case: str, arm: str, run: int, args: argparse.N
     return RunResult(case, arm, run, None, error, log)
 
 
-def run_manual(ws: Path, cases: list[str], args: argparse.Namespace) -> None:
+def run_manual(ws: Path, cases: list[str], args: argparse.Namespace,
+               inputs: dict[str, str]) -> dict[str, tuple[str, list[float]]]:
+    """Run every case's arms and write uplift.json. A without-skill arm cached under the case's
+    baseline_key (same case, model, executor, run-case.sh, suite and gate inputs) is reused unless
+    --fresh-baseline, and the artifact records the entry's key and hash. Returns the complete fresh
+    without-skill arms by case, (key, scores), for run_gate to cache once the inputs are unchanged."""
+    keys = {case: baseline_key(ws, case, args.model, args.executor, inputs) for case in cases}
+    cached = {} if args.fresh_baseline else {
+        case: scores for case in cases if (scores := read_baseline(ws, keys[case], args.runs)) is not None}
+    if cached:
+        print(f"gate: reusing the cached without-skill arm for {len(cached)} of {len(cases)} cases "
+              f"({BASELINE_CACHE.as_posix()}/; --fresh-baseline re-runs them)", file=sys.stderr)
     jobs = [(i, case, arm, run) for i, case in enumerate(cases)
-            for arm in ("with", "without") for run in range(1, args.runs + 1)]
+            for arm in ("with", "without") for run in range(1, args.runs + 1)
+            if not (arm == "without" and case in cached)]
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
         futures = [pool.submit(_one_run, ws, *job, args) for job in jobs]
         pending = set(futures)
@@ -483,17 +501,22 @@ def run_manual(ws: Path, cases: list[str], args: argparse.Namespace) -> None:
         raise GateStopped()
     results = [f.result() for f in futures]
 
-    out_cases, errors = [], []
+    out_cases, errors, fresh = [], [], {}
     for case in cases:
-        arms = {}
+        arms, entry = {}, {"case": case}
         for arm in ("with", "without"):
             mine = sorted((r for r in results if r.case == case and r.arm == arm), key=lambda r: r.run)
             arms[arm] = [r.score for r in mine if r.score is not None]
             errors += [{"case": case, "arm": arm, "run": r.run, "error": r.error, "log": r.log}
                        for r in mine if r.error]
+        if case in cached:
+            arms["without"] = cached[case]
+            entry["without_cache"] = {"key": keys[case], "sha256": file_sha256(baseline_path(ws, keys[case]))}
+        elif len(arms["without"]) == args.runs:
+            fresh[case] = (keys[case], arms["without"])
         delta = (round(sum(arms["with"]) / len(arms["with"]) - sum(arms["without"]) / len(arms["without"]), 4)
                  if arms["with"] and arms["without"] else None)
-        out_cases.append({"case": case, "with": arms["with"], "without": arms["without"], "delta": delta})
+        out_cases.append({**entry, "with": arms["with"], "without": arms["without"], "delta": delta})
 
     def mean_of(arm: str) -> float | None:
         scores = [s for c in out_cases for s in c[arm]]
@@ -513,6 +536,15 @@ def run_manual(ws: Path, cases: list[str], args: argparse.Namespace) -> None:
     })
     for err in errors:
         print(f"gate: {err['case']} {err['arm']} run {err['run']}: {err['error']} (log {err['log']})", file=sys.stderr)
+    return fresh
+
+
+def cache_baselines(ws: Path, fresh: dict[str, tuple[str, list[float]]], args: argparse.Namespace) -> None:
+    for case, (key, scores) in fresh.items():
+        path = baseline_path(ws, key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_json(path, {"key": key, "case": case, "model": args.model, "executor": args.executor,
+                          "runs": scores, "written": _now()})
 
 
 def _watch_stop_file() -> None:
@@ -538,7 +570,8 @@ def run_gate(ws: Path, args: argparse.Namespace) -> int:
         skill, cases, mode, available, invoked = preconditions(ws, args)
         artifact = PLUGIN_ARTIFACT if mode == "plugin" else MANUAL_ARTIFACT
         record = {"mode": mode, "backend": args.backend or default_backend(), "plugin_eval_available": available,
-                  "model_invoked": invoked, "force_manual": args.force_manual, "skill": skill,
+                  "model_invoked": invoked, "force_manual": args.force_manual,
+                  "fresh_baseline": args.fresh_baseline, "skill": skill,
                   "model": args.model, "runs": args.runs, "in_sample": args.in_sample, "executor": args.executor,
                   "cases": cases, "artifact": artifact.as_posix(), **_input_hashes(ws, skill, cases),
                   "started": _now(), "finished": None}
@@ -547,10 +580,11 @@ def run_gate(ws: Path, args: argparse.Namespace) -> int:
         print(f"gate: mode={mode} (plugin eval probe exit {available}, model-invoked={invoked}), "
               f"{len(cases)} cases x {args.runs} runs per arm", file=sys.stderr)
         log_attempt(ws, "gate")
+        fresh = {}
         if mode == "plugin":
             run_plugin(ws, skill, args)
         else:
-            run_manual(ws, cases, args)
+            fresh = run_manual(ws, cases, args, record["inputs_sha256"])
     except GateError as exc:
         log_attempt(ws, "gate", str(exc))
         print(f"gate: {exc}", file=sys.stderr)
@@ -568,6 +602,7 @@ def run_gate(ws: Path, args: argparse.Namespace) -> int:
         print(f"gate: GATE INVALID: gate inputs changed while the gate ran ({', '.join(changed)}); gate.json records "
               "no finished run; re-run 5.0 without editing the workspace meanwhile", file=sys.stderr)
         return EXIT_INVALID
+    cache_baselines(ws, fresh, args)
     record |= {"artifact_sha256": file_sha256(ws / artifact), "finished": _now()}
     write_json(ws / GATE_RECORD, record)
     verdict = check_gate.validate(ws, skill)
@@ -613,6 +648,8 @@ def _job_argv(ws: Path, args: argparse.Namespace) -> list[str]:
         argv += ["--force-manual", args.force_manual]
     if args.in_sample:
         argv.append("--in-sample")
+    if args.fresh_baseline:
+        argv.append("--fresh-baseline")
     if args.executor:
         argv += ["--executor", args.executor]
     return argv
@@ -707,6 +744,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="the gate cases are also training cases (3-9 gold standards)")
     parser.add_argument("--executor", choices=["single-call", "agentic"],
                         help="manual mode: how run-case.sh executes the skill (required there)")
+    parser.add_argument("--fresh-baseline", action="store_true",
+                        help="manual mode: re-run every without-skill arm instead of reusing work/evaluation/"
+                             "baseline-cache/")
     parser.add_argument("--timeout", type=float, default=EVAL_TIMEOUT,
                         help=f"plugin mode: seconds for the whole eval (default {EVAL_TIMEOUT})")
     parser.add_argument("--case-timeout", type=float, default=CASE_TIMEOUT,

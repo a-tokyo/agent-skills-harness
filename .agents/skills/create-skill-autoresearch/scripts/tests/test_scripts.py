@@ -1246,7 +1246,7 @@ class GateManualTest(TempWorkspace):
         self.manual_gate()
         evaluation = self.ws / "work" / "evaluation"
         for generated in (".cases.tmp", "uplift.prev.json", "plugin/skills/demo/SKILL.md",
-                          "plugin/evals/results/run-1/report.html"):
+                          "plugin/evals/results/run-1/report.html", "baseline-cache/scratch.json"):
             (evaluation / generated).parent.mkdir(parents=True, exist_ok=True)
             (evaluation / generated).write_text("x")
         self.assertEqual(self.run_script("check_gate.py").returncode, 0)
@@ -1296,6 +1296,8 @@ class GateManualTest(TempWorkspace):
         record = self.evaluation("gate.json")
         self.assertIsNone(record["finished"])
         self.assertEqual(record["changed_during_run"], ["inputs_sha256"])
+        self.assertFalse((self.ws / "work" / "evaluation" / "baseline-cache").exists(),
+                         "a without arm run on changing inputs is never cached")
         self.assertEqual(json.loads(self.run_script("check_gate.py", "--json").stdout)["code"], "gate_unfinished")
 
     def test_a_run_without_the_executor_receipt_fails(self) -> None:
@@ -1320,6 +1322,91 @@ class GateManualTest(TempWorkspace):
         self.assertEqual(self.run_script("check_gate.py").returncode, 0, "comments and layout are not the splits")
         split.write_text(split.read_text().replace("training: []", 'training: ["input-02"]'))
         self.assert_stale("work/evaluation/data-split.yaml (its splits)")
+
+    def baseline_build(self) -> Path:
+        """A user-invoked build whose adapter logs each run's `<case> <arm>` to work/pids/calls.log."""
+        self.make_build(["input-01", "input-02"], invoked=False)
+        self.write_adapter(SCORING_ADAPTER.replace(
+            'echo "EXECUTOR=$GATE_EXECUTOR"', 'echo "EXECUTOR=$GATE_EXECUTOR"; echo "$case $arm" >> work/pids/calls.log'))
+        (self.ws / "work" / "evaluation" / "score.py").write_text("print('SCORE=1')\n")
+        return self.ws / "work" / "pids" / "calls.log"
+
+    def gate_runs(self, calls: Path, *args: str) -> tuple[subprocess.CompletedProcess, int, int]:
+        """One manual gate; (its output, with-arm runs, without-arm runs) it spawned."""
+        def counts() -> tuple[int, int]:
+            lines = calls.read_text().splitlines() if calls.is_file() else []
+            return sum(line.endswith(" with") for line in lines), sum(line.endswith(" without") for line in lines)
+        with_before, without_before = counts()
+        out = self.run_script("gate.py", "--model", "m", "--executor", "single-call", *args)
+        with_after, without_after = counts()
+        return out, with_after - with_before, without_after - without_before
+
+    def test_a_re_gate_reuses_the_cached_without_arm(self) -> None:
+        calls = self.baseline_build()
+        out, with_runs, without_runs = self.gate_runs(calls)
+        self.assertEqual((out.returncode, with_runs, without_runs), (0, 6, 6), out.stdout + out.stderr)
+        cache = self.ws / "work" / "evaluation" / "baseline-cache"
+        self.assertEqual(len(list(cache.glob("*.json"))), 2)
+        self.assertNotIn("without_cache", json.dumps(self.evaluation("uplift.json")))
+        (self.ws / "output" / "demo" / "SKILL.md").write_text("---\nname: demo\ndisable-model-invocation: true\n"
+                                                              "description: Demo.\n---\n# Demo, revised\n")
+        out, with_runs, without_runs = self.gate_runs(calls)
+        self.assertEqual((out.returncode, with_runs, without_runs), (0, 6, 0), out.stdout + out.stderr)
+        self.assertIn("reusing the cached without-skill arm for 2 of 2 cases", out.stdout)
+        data = self.evaluation("uplift.json")
+        self.assertEqual([c["without"] for c in data["cases"]], [[0.4] * 3] * 2)
+        for case in data["cases"]:
+            path = cache / f"{case['without_cache']['key']}.json"
+            self.assertEqual(case["without_cache"]["sha256"], gate_common.file_sha256(path))
+        self.assertEqual(self.run_script("check_gate.py").returncode, 0)
+        out, with_runs, without_runs = self.gate_runs(calls, "--fresh-baseline")
+        self.assertEqual((out.returncode, with_runs, without_runs), (0, 6, 6), out.stdout + out.stderr)
+        self.assertNotIn("without_cache", json.dumps(self.evaluation("uplift.json")))
+        self.assertTrue(self.evaluation("gate.json")["fresh_baseline"])
+
+    def test_a_grader_change_misses_the_cache(self) -> None:
+        calls = self.baseline_build()
+        self.assertEqual(self.gate_runs(calls)[0].returncode, 0)
+        (self.ws / "work" / "evaluation" / "score.py").write_text("print('SCORE=0.5')\n")
+        out, _, without_runs = self.gate_runs(calls)
+        self.assertEqual((out.returncode, without_runs), (0, 6), out.stdout + out.stderr)
+        self.assertNotIn("reusing", out.stdout)
+        self.write_adapter(SCORING_ADAPTER.replace('echo "EXECUTOR', 'echo "$case $arm" >> work/pids/calls.log; echo "EXECUTOR'))
+        out, _, without_runs = self.gate_runs(calls)
+        self.assertEqual((out.returncode, without_runs), (0, 6), "a run-case.sh edit misses it too")
+        out = self.run_script("gate.py", "--model", "other", "--executor", "single-call")
+        self.assertNotIn("reusing", out.stdout, "so does another model")
+
+    def test_a_stale_or_missing_cache_entry_fails_the_gate_that_reused_it(self) -> None:
+        calls = self.baseline_build()
+        self.assertEqual(self.gate_runs(calls)[0].returncode, 0)
+        self.assertEqual(self.gate_runs(calls)[2], 0)
+        entry = self.ws / "work" / "evaluation" / "baseline-cache" / \
+            f"{self.evaluation('uplift.json')['cases'][0]['without_cache']['key']}.json"
+        original = entry.read_bytes()
+        entry.write_bytes(original.replace(b"0.4", b"0.1"))
+        verdict = json.loads(self.run_script("check_gate.py", "--json").stdout)
+        self.assertEqual(verdict["code"], "stale_baseline")
+        self.assertIn("not the entry the gate reused", verdict["reason"])
+        entry.unlink()
+        self.assertEqual(json.loads(self.run_script("check_gate.py", "--json").stdout)["code"], "stale_baseline")
+        entry.write_bytes(original)
+        self.assertEqual(self.run_script("check_gate.py").returncode, 0)
+        case = dict(self.evaluation("uplift.json")["cases"][0])
+        with self.assertRaises(gate.check_gate.Invalid) as raised:
+            gate.check_gate._reused_baseline(self.ws, case["case"], case, {"model": "other", "executor": "single-call"})
+        self.assertIn("key no longer matches", raised.exception.reason)
+        case["without_cache"] = {"key": "../../escape", "sha256": "x"}
+        with self.assertRaises(gate.check_gate.Invalid):
+            gate.check_gate._reused_baseline(self.ws, case["case"], case, {"model": "m", "executor": "single-call"})
+
+    def test_a_malformed_cache_entry_is_re_run_not_reused(self) -> None:
+        calls = self.baseline_build()
+        self.assertEqual(self.gate_runs(calls)[0].returncode, 0)
+        for entry in (self.ws / "work" / "evaluation" / "baseline-cache").glob("*.json"):
+            entry.write_text(json.dumps({**json.loads(entry.read_text()), "runs": [0.4, 0.4]}))
+        out, _, without_runs = self.gate_runs(calls)
+        self.assertEqual((out.returncode, without_runs), (0, 6), out.stdout + out.stderr)
 
     def test_missing_adapter_is_a_precondition_error(self) -> None:
         self.make_build(["input-01"], invoked=False)
