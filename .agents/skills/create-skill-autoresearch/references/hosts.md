@@ -116,6 +116,13 @@ sends the agent back once with the reason, logged to `work/experiments/finish-gu
 in a row, and ends the turn on any error of its own. An interactive build costs one extra reply per stop from Phase 3 on:
 the agent re-ends the turn on its question.
 
+It guards only the main session's turn. A phase worker's, researcher's or panel member's stop never triggers it:
+Claude Code ends a subagent on `SubagentStop` and Cursor on `subagentStop`, events the shipped configs do not
+register, and the script also ignores either event and any payload carrying Claude Code's `agent_id`; the OpenCode
+plugin skips child sessions (a `parentID`). Verified live on Claude Code 2.1.306 (`claude -p --plugin-dir`, a
+Haiku main session spawning one subagent in an unfinished build: one `finish-guard.jsonl` entry, the main
+session's); offline for Cursor and OpenCode; Codex subagent stops untested.
+
 | Host | Ships as | Loop guard | Status |
 |---|---|---|---|
 | Claude Code | `hooks/hooks.json` `Stop` (plugin install, or `claude --plugin-dir <skill-dir>`) | `stop_hook_active`; Claude Code also caps a turn at 8 continuations | verified live (`claude -p --plugin-dir`: sent back once, the next stop ended the turn) |
