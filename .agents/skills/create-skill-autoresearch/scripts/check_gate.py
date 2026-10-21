@@ -32,7 +32,7 @@ import run_owned  # noqa: E402
 from gate_common import (  # noqa: E402
     BASELINE_KEY, DATA_SPLIT, GATE_ATTEMPTS, GATE_RECORD, MANUAL_ARTIFACT, PLUGIN_ARTIFACT, REQUIRED_RUNS, RUN_CASE,
     GateError, baseline_key, baseline_path, cases_sha256, check_skill_name, file_sha256, inputs_sha256, is_number,
-    read_attempts, read_baseline, read_data_split, read_json, skill_sha256, split_sha256, utf8_stdio,
+    json_lines, read_attempts, read_baseline, read_data_split, read_json, skill_sha256, split_sha256, utf8_stdio,
 )
 
 BENCHMARK = Path("BENCHMARK.md")
@@ -338,9 +338,7 @@ def fast_path(workspace: Path, skill: str | None = None) -> tuple[bool, str]:
     if gate.non_positive:
         return False, f"gold delta<=0 on {', '.join(gate.non_positive)}"
     log = next((workspace / p for p in EXPERIMENT_LOGS if (workspace / p).is_file()), None)
-    experiments = [e for line in (log.read_text(encoding="utf-8", errors="replace").splitlines() if log else [])
-                   if isinstance(e := _json_line(line), dict) and "experiment" in e
-                   and e.get("type") in (None, "experiment")]
+    experiments = [e for e in json_lines(log) if "experiment" in e and e.get("type") in (None, "experiment")]
     zero = [e for e in experiments if e.get("experiment") == 0]
     if not zero:
         return False, "no experiment 0 in autoresearch.jsonl (3.5 logs the baseline there)"
@@ -366,13 +364,6 @@ def fast_path(workspace: Path, skill: str | None = None) -> tuple[bool, str]:
             return False, f"output/{gate.skill}/ changed since experiment 0 (commit {commit.strip()})"
     return True, (f"baseline overall_score {metric:.3f} >= target_score {target:.2f} and every gold delta > 0 "
                   f"(mean {gate.mean_delta:+.3f}); skip the Phase 4 loop (4.1-4.6) and continue at 5.1")
-
-
-def _json_line(line: str) -> object:
-    try:
-        return json.loads(line)
-    except json.JSONDecodeError:
-        return None
 
 
 def main(argv: list[str] | None = None) -> int:
