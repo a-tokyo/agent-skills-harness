@@ -1,14 +1,8 @@
-// OpenCode plugin: the create-skill-autoresearch kill guard (references/hosts.md).
-//
-// OpenCode loads plugins from .opencode/plugins/ or ~/.config/opencode/plugins/. Symlink this file
-// there rather than copying it: it runs ./kill_guard.py beside its real path, so detection lives in one
-// place. Set CSA_KILL_GUARD to the script's path when the symlink is not possible.
-//
-// OpenCode treats every export of a plugin module as a plugin, so this module exports only KillGuard.
-// Before every bash tool call it sends the command to kill_guard.py as a PreToolUse event, with the
-// first Python 3 that runs (python3, python); exit 2 blocks the call by
-// throwing, which OpenCode reports to the agent. If no Python runs, the call is let through with a
-// warning: the guard must never stop every shell call.
+// OpenCode plugin: the create-skill-autoresearch kill guard (references/hosts.md). Symlink it into
+// .opencode/plugins/ or ~/.config/opencode/plugins/ (or set CSA_KILL_GUARD) so it runs ./kill_guard.py beside
+// its real path. Before every bash call it sends the command as a PreToolUse event to the first Python 3 that
+// runs; exit 2 blocks the call by throwing. No Python: the call goes through with a warning. OpenCode treats
+// every export as a plugin, so this module exports only KillGuard.
 import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";

@@ -1,40 +1,14 @@
 #!/usr/bin/env python3
-"""Shell-command hook: block pattern-based process kills, on every host whose hooks can block a command.
+"""Shell-command hook: block pattern-based process kills (`pkill`, `killall`, `fuser -k`, a process listing and a
+kill in one call), which also hit sibling builds and the user's processes; run_owned.py stops only what it
+recorded. What it blocks and allows, and each host's install: references/hosts.md "Kill guard".
 
-A name-pattern kill (`pkill -f gate`, `killall python3`, `pgrep -f x | xargs kill`, `kill $(pgrep x)`)
-also hits sibling builds and the user's own
-processes; the factory's run_owned.py stops only the job it recorded. One script, two input/output
-contracts (references/hosts.md):
+  Claude Code, Codex  PreToolUse {"tool_input": {"command": ...}}: block = exit 2, reason on stderr; allow = exit 0.
+  Cursor              beforeShellExecution {"command": ...}: always JSON on stdout, exit 0, {"permission":
+                      "deny", "user_message", "agent_message"} or {"permission": "allow"}.
 
-  Claude Code, Codex  PreToolUse, stdin {"tool_name": ..., "tool_input": {"command": ...}}.
-                      Block: exit 2, reason on stderr. Allow: exit 0, no output.
-  Cursor              beforeShellExecution, stdin {"hook_event_name": "beforeShellExecution",
-                      "command": ..., "cwd": ..., "sandbox": ...}. Always answers JSON on stdout,
-                      exit 0: {"permission": "deny", "user_message", "agent_message"} or
-                      {"permission": "allow"} (Cursor blocks a permission hook that prints nothing).
-
-hooks/kill-guard runs it with whichever Python 3 the machine has; OpenCode runs it through
-hooks/opencode-kill-guard.js. Input it cannot read is let through, with {"permission": "allow"} on
-stdout for Cursor's sake: the guard must never stop every shell call. A command that only mentions one
-of these words (a grep for `pkill`) is blocked too, and so is one call that mentions a lister and a
-`kill` beside any redirect, a heredoc body included: write such files with the editor tool or in a
-separate call. The message says what to run instead.
-
-It is a best-effort tripwire for honest mistakes, not a sandbox: it sees one tool call at a time, so a
-listing written to a file in one call and killed from it in the next passes. run_owned.py and the rule
-"stop only what you started, by its recorded PID" are the contract.
-
-Quotes, backslashes and line continuations are removed first, so `p'k'ill`, `"pkill"` and `\\pkill` do not
-hide a kill. `kill` counts only as a word of its own, never inside `kill-guard`/`kill_guard`. Blocked:
-  pkill, killall                              anywhere as a word (any path: /usr/bin/pkill)
-  fuser -k                                    kills whatever holds a file or port
-  a process lister and a kill in one call     lister: pgrep, pidof, lsof, ps; kill: kill, xargs kill
-The last rule is conservative: renames, copies and variables between the listing and the kill do not
-matter. It allows one form only: every kill is a simple command (not piped into) whose targets are
-literal PIDs, job specs or flags (`ps aux | head; kill 1234`, `ps -o pgid= -p 42; kill -TERM -- -42`), and
-nothing in the call keeps a listing: no $( … ), backticks, <( … ), `>` (other than >&N or >/dev/null),
-`tee` or `$x =`. So `ps aux > f; kill 4242` and
-`ps aux | head; kill $PID` are blocked: run the kill in a call of its own.
+Input it cannot read is allowed (with Cursor's JSON): the guard must never stop every shell call. It is a
+best-effort tripwire for honest mistakes, not a sandbox: it sees one call at a time.
 """
 
 from __future__ import annotations
@@ -43,7 +17,6 @@ import json
 import os
 import re
 import sys
-
 
 if os.name == "nt":  # the host gets its "allow" answer, so no shell call or turn is held
     print("kill guard: native Windows is not supported; run the factory inside WSL", file=sys.stderr)
