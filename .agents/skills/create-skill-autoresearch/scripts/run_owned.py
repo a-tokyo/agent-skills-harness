@@ -1,24 +1,17 @@
 #!/usr/bin/env python3
-"""Run background jobs as owned process groups, and stop only those groups.
+"""Run background jobs as owned process groups, and stop only those groups (references/operating-rules.md).
 
     run_owned.py start <name> [--cwd DIR] [--log FILE] -- <cmd...>
     run_owned.py wait <name> [--timeout SECONDS]
     run_owned.py stop <name> [--grace SECONDS]      # waits up to grace + 10 s for the supervisor
     run_owned.py status <name>
 
-Each job runs under a detached supervisor (this script) that holds work/pids/<name>.lock while it lives,
-forks the command into a new session (the command's pid is its group's id) once `start` has written the
-record, and writes the command's exit status to work/pids/<name>.rc. `stop` writes work/pids/<name>.stop;
-the supervisor TERMs its group, KILLs it after the grace period and exits. A held lock is a live job, so
-start refusal and stop need no `ps` (agent sandboxes deny it) and never reach a sibling build or the
-user's processes the way pattern kills do. `start` holds <name>.start.lock while it checks and writes, so
-concurrent starts of one name run it once. Only when the supervisor is gone and the leader still runs does
-`stop` signal the recorded group, after `ps` confirms the leader's start time and that it leads that
-group; when it cannot, `stop` refuses and `start` will not overwrite the record.
-
-The record, work/pids/<name>.json, holds the pids, the pgid, the leader's start time, a token and the
-command; the job sees RUN_OWNED_JOB, RUN_OWNED_PGID and RUN_OWNED_TOKEN. `start` writes a `.gitignore` of
-`*` in work/pids/. Paths are relative to --workspace (default: .). Python 3.9+, macOS, Linux or WSL.
+A detached supervisor holds work/pids/<name>.lock while it lives, forks the command into a new session once the
+record (<name>.json) is written, records its exit status (<name>.rc), and on `stop` (<name>.stop) TERMs the
+group, KILLs it after the grace period and exits, so start refusal and stop need no `ps`. With the supervisor
+gone, `stop` signals the recorded group only after `ps` confirms the leader's start time and that it leads the
+group; otherwise it refuses, and `start` will not overwrite the record. The job sees RUN_OWNED_JOB,
+RUN_OWNED_PGID and RUN_OWNED_TOKEN. Python 3.9+, macOS, Linux or WSL.
 
 Exit codes: 0 success (wait: the job exited 0); the job's own exit code from wait; 2 usage error; 3 state
 error (no record, name already running, a job it cannot verify or refuses to signal, an unconfirmed stop);
@@ -150,30 +143,27 @@ def _lstart(pid: int) -> str | None:
     return out.stdout.strip() or None
 
 
+def _signal_group(pgid: int, sig: int) -> bool:
+    """Signal the group; False when none of it can be signalled (macOS answers EPERM for a zombie-only group)."""
+    try:
+        os.killpg(pgid, sig)
+    except (ProcessLookupError, PermissionError):
+        return False
+    return True
+
+
+def _group_alive(pgid: int) -> bool:
+    return _signal_group(pgid, 0)
+
+
 def _pid_alive(pid: int) -> bool:
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
         return False
     except PermissionError:
-        return True
-    return True
-
-
-def _group_alive(pgid: int) -> bool:
-    """True while the group has a member we can signal (macOS answers EPERM for a zombie-only group)."""
-    try:
-        os.killpg(pgid, 0)
-    except (ProcessLookupError, PermissionError):
-        return False
-    return True
-
-
-def _signal_group(pgid: int, sig: int) -> None:
-    try:
-        os.killpg(pgid, sig)
-    except (ProcessLookupError, PermissionError):
         pass
+    return True
 
 
 def _leader_state(rec: Record) -> str:
