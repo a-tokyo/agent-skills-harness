@@ -17,7 +17,7 @@ cd "$(dirname "$0")/../.."
 
 FACTORY_SKILL=".agents/skills/create-skill-autoresearch/SKILL.md"
 AUTORESEARCH_SKILL=".agents/skills/autoresearch/SKILL.md"
-PIPELINE_REF=".agents/skills/create-skill-autoresearch/references/pipeline-phases.md"
+PHASE12_REF=".agents/skills/create-skill-autoresearch/references/phase-1-2.md"
 CONSENSUS_REF=".agents/skills/create-skill-autoresearch/references/consensus-protocol.md"
 RUBRIC_REF=".agents/skills/create-skill-autoresearch/references/rubric-templates.md"
 FALLBACK_REF=".agents/skills/create-skill-autoresearch/references/standalone-fallback.md"
@@ -93,7 +93,7 @@ check structural "Autoresearch has YAML frontmatter" $(head -1 "$AUTORESEARCH_SK
 dim_crossref_max=0
 
 # Check factory references resolve
-for ref in "references/pipeline-phases.md" "references/rubric-templates.md" "references/consensus-protocol.md" \
+for ref in "references/phase-1-2.md" "references/rubric-templates.md" "references/consensus-protocol.md" \
            "references/standalone-fallback.md" \
            "references/benchmark-standard.md" "references/publishing.md"; do
   dim_crossref_max=$((dim_crossref_max + 1))
@@ -177,7 +177,7 @@ check consistency "Autoresearch has context budget guidance" $([ "$CONTEXT_BUDGE
 
 # Devil's Advocate spelling
 dim_consistency_max=$((dim_consistency_max + 1))
-DEVILS_WRONG=$( (grep -r "Devils Advocate" "$FACTORY_SKILL" "$PIPELINE_REF" "$PHASE5_REF" "$CONSENSUS_REF" 2>/dev/null || true) | wc -l | tr -d ' ')
+DEVILS_WRONG=$( (grep -r "Devils Advocate" "$FACTORY_SKILL" "$PHASE12_REF" "$PHASE5_REF" "$CONSENSUS_REF" 2>/dev/null || true) | wc -l | tr -d ' ')
 check consistency "No misspelled Devils Advocate" $([ "$DEVILS_WRONG" -eq 0 ] && echo 1 || echo 0)
 
 # ============================================================================
@@ -231,7 +231,7 @@ CODE_BLOCKS=$(grep -cE '^```(yaml|bash|sh)' "$FACTORY_SKILL" || true)
 check clarity "Factory has concrete yaml/bash examples (actual: $CODE_BLOCKS)" $([ "$CODE_BLOCKS" -ge 2 ] && echo 1 || echo 0)
 
 dim_clarity_max=$((dim_clarity_max + 1))
-BASH_BLOCKS=$(cat "$PIPELINE_REF" "$PHASE3_REF" "$PHASE4_REF" "$PHASE5_REF" | grep -c '```bash\|```sh' || true)
+BASH_BLOCKS=$(cat "$PHASE12_REF" "$PHASE3_REF" "$PHASE4_REF" "$PHASE5_REF" | grep -c '```bash\|```sh' || true)
 check clarity "Phase refs have bash examples (actual: $BASH_BLOCKS)" $([ "$BASH_BLOCKS" -ge 2 ] && echo 1 || echo 0)
 
 # Has tables for quick reference
