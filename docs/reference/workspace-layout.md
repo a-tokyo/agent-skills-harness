@@ -191,7 +191,7 @@ session ends or on handoff.
 The upstream autoresearch skill keeps only `results.tsv` and `run.log`; the factory writes
 `autoresearch.jsonl` and `autoresearch.ideas.md` itself and runs `work/evaluation/evaluate-checks.sh`
 (when present) before every measurement — see the "Loop Conventions the Factory Owns" section of the
-factory's `references/pipeline-phases.md`.
+factory's `references/phase-4.md`.
 
 `BENCHMARK.md` (final pass/fail scores for the shipped skill) is generated at the end of Phase 5
 (Verify) and placed at `builds/<skill-name>/BENCHMARK.md`. It is a summary, not a process artifact.

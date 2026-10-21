@@ -21,9 +21,17 @@ PIPELINE_REF=".agents/skills/create-skill-autoresearch/references/pipeline-phase
 CONSENSUS_REF=".agents/skills/create-skill-autoresearch/references/consensus-protocol.md"
 RUBRIC_REF=".agents/skills/create-skill-autoresearch/references/rubric-templates.md"
 FALLBACK_REF=".agents/skills/create-skill-autoresearch/references/standalone-fallback.md"
+PHASE3_REF=".agents/skills/create-skill-autoresearch/references/phase-3.md"
+PHASE4_REF=".agents/skills/create-skill-autoresearch/references/phase-4.md"
+PHASE5_REF=".agents/skills/create-skill-autoresearch/references/phase-5.md"
+# SKILL.md is the main session's router; phase detail lives in the phase files its workers read
+# (references/phase-3.md, phase-4.md, phase-5.md). Content checks read the factory's instructions as a
+# whole: the router plus the phase files it dispatches. Router-only checks still read $FACTORY_SKILL.
+FACTORY_DOCS=("$FACTORY_SKILL" "$PHASE3_REF" "$PHASE4_REF" "$PHASE5_REF")
+factory_has() { grep -q "$@" "${FACTORY_DOCS[@]}" && echo 1 || echo 0; }
 # The factory runs the upstream autoresearch skill and owns the loop conventions it needs
-# (SKILL.md 4.1-4.3 + pipeline-phases.md Phase 4); convention checks read this contract.
-AR_CONTRACT_FILES=("$FACTORY_SKILL" "$PIPELINE_REF")
+# (phase-4.md 4.1-4.3 + its Loop Conventions); convention checks read this contract.
+AR_CONTRACT_FILES=("$FACTORY_SKILL" "$PHASE4_REF")
 ar_count() { cat "${AR_CONTRACT_FILES[@]}" | grep -c "$@" || true; }
 ar_has() { grep -q "$@" "${AR_CONTRACT_FILES[@]}" && echo 1 || echo 0; }
 WORKSPACE_DOC="docs/reference/workspace-layout.md"
@@ -169,7 +177,7 @@ check consistency "Autoresearch has context budget guidance" $([ "$CONTEXT_BUDGE
 
 # Devil's Advocate spelling
 dim_consistency_max=$((dim_consistency_max + 1))
-DEVILS_WRONG=$( (grep -r "Devils Advocate" "$FACTORY_SKILL" "$PIPELINE_REF" "$CONSENSUS_REF" 2>/dev/null || true) | wc -l | tr -d ' ')
+DEVILS_WRONG=$( (grep -r "Devils Advocate" "$FACTORY_SKILL" "$PIPELINE_REF" "$PHASE5_REF" "$CONSENSUS_REF" 2>/dev/null || true) | wc -l | tr -d ' ')
 check consistency "No misspelled Devils Advocate" $([ "$DEVILS_WRONG" -eq 0 ] && echo 1 || echo 0)
 
 # ============================================================================
@@ -203,14 +211,14 @@ done
 
 # Overfitting detection
 dim_completeness_max=$((dim_completeness_max + 1))
-check completeness "Factory has overfitting detection" $(grep -qic "overfitting" "$FACTORY_SKILL" && echo 1 || echo 0)
+check completeness "Factory has overfitting detection" $(factory_has -i "overfitting")
 
 dim_completeness_max=$((dim_completeness_max + 1))
-check completeness "Factory has leave-one-out overfitting" $(grep -qic "leave-one-out.*overfitting\|overfitting.*leave-one-out\|per-case.*variance" "$FACTORY_SKILL" && echo 1 || echo 0)
+check completeness "Factory has leave-one-out overfitting" $(factory_has -i "leave-one-out.*overfitting\|overfitting.*leave-one-out\|per-case.*variance")
 
 # LLM system prompt guidance
 dim_completeness_max=$((dim_completeness_max + 1))
-check completeness "Factory explains skill invocation as LLM prompt" $(grep -qic "system prompt\|LLM.*system\|SKILL.md as.*prompt" "$FACTORY_SKILL" && echo 1 || echo 0)
+check completeness "Factory explains skill invocation as LLM prompt" $(factory_has -i "system prompt\|LLM.*system\|SKILL.md as.*prompt")
 
 # ============================================================================
 # CLARITY (actionability for a naive agent)
@@ -223,8 +231,8 @@ CODE_BLOCKS=$(grep -cE '^```(yaml|bash|sh)' "$FACTORY_SKILL" || true)
 check clarity "Factory has concrete yaml/bash examples (actual: $CODE_BLOCKS)" $([ "$CODE_BLOCKS" -ge 2 ] && echo 1 || echo 0)
 
 dim_clarity_max=$((dim_clarity_max + 1))
-BASH_BLOCKS=$(grep -c '```bash\|```sh' "$PIPELINE_REF" 2>/dev/null || echo 0)
-check clarity "Pipeline ref has bash examples (actual: $BASH_BLOCKS)" $([ "$BASH_BLOCKS" -ge 2 ] && echo 1 || echo 0)
+BASH_BLOCKS=$(cat "$PIPELINE_REF" "$PHASE3_REF" "$PHASE4_REF" "$PHASE5_REF" | grep -c '```bash\|```sh' || true)
+check clarity "Phase refs have bash examples (actual: $BASH_BLOCKS)" $([ "$BASH_BLOCKS" -ge 2 ] && echo 1 || echo 0)
 
 # Has tables for quick reference
 dim_clarity_max=$((dim_clarity_max + 1))
@@ -251,7 +259,7 @@ check depth "Factory handles 0 gold standards" $(grep -qic "synthetic\|create.*e
 
 # Does factory mention cost/budget awareness for evaluation?
 dim_depth_max=$((dim_depth_max + 1))
-check depth "Factory has cost awareness for large gold standard sets" $(grep -qc "cost.*evaluat\|evaluat.*cost\|sampling.*strategy\|100+" "$FACTORY_SKILL" && echo 1 || echo 0)
+check depth "Factory has cost awareness for large gold standard sets" $(factory_has "cost.*evaluat\|evaluat.*cost\|sampling.*strategy\|100+")
 
 # Does autoresearch mention what happens at experiment 0 if baseline fails?
 dim_depth_max=$((dim_depth_max + 1))
@@ -259,7 +267,7 @@ check depth "Autoresearch contract handles baseline failure" $(ar_has -i "baseli
 
 # Does factory explain how evaluate.sh runs the skill? (the critical invocation gap)
 dim_depth_max=$((dim_depth_max + 1))
-check depth "Factory evaluate.sh shows LLM invocation mechanism" $(grep -qc "curl\|API.*call\|sdk\|programmatic" "$FACTORY_SKILL" && echo 1 || echo 0)
+check depth "Factory evaluate.sh shows LLM invocation mechanism" $(factory_has "curl\|API.*call\|sdk\|programmatic")
 
 # Does autoresearch explain what to do when metric variance is high?
 dim_depth_max=$((dim_depth_max + 1))
@@ -269,6 +277,18 @@ check depth "Autoresearch contract addresses judge variance" $(ar_has -i "varian
 dim_depth_max=$((dim_depth_max + 1))
 FACTORY_LINES=$(wc -l < "$FACTORY_SKILL")
 check depth "Factory SKILL.md has > 25 line margin (actual: $((500 - FACTORY_LINES)))" $([ "$((500 - FACTORY_LINES))" -ge 25 ] && echo 1 || echo 0)
+
+# SKILL.md is re-read on every main-session call, so it stays a lean router (cost parity, criterion 17)
+dim_depth_max=$((dim_depth_max + 1))
+check depth "Factory SKILL.md is a router <= 260 lines (actual: $FACTORY_LINES)" $([ "$FACTORY_LINES" -le 260 ] && echo 1 || echo 0)
+
+# The orchestration contract: each phase worker reads only its file and returns a short summary
+for ref in "references/phase-3.md" "references/phase-4.md" "references/phase-5.md" "references/operating-rules.md"; do
+  dim_depth_max=$((dim_depth_max + 1))
+  check depth "Router dispatches a worker with $ref" $(grep -qF "$ref" "$FACTORY_SKILL" && [ -f ".agents/skills/create-skill-autoresearch/$ref" ] && echo 1 || echo 0)
+done
+dim_depth_max=$((dim_depth_max + 1))
+check depth "Worker summary is bounded (<= 15 lines) in the dispatch prompt" $(grep -qi "at most 15 lines" "$FACTORY_SKILL" && echo 1 || echo 0)
 
 # Is there guidance on minimum improvement for LLM-judge metrics?
 dim_depth_max=$((dim_depth_max + 1))
@@ -284,7 +304,7 @@ check depth "Autoresearch contract has configurable plateau window" $(ar_has "pl
 
 # Does factory reference the self-test?
 dim_depth_max=$((dim_depth_max + 1))
-check depth "Factory references self-test evaluate.sh" $(grep -qc "self-test" "$FACTORY_SKILL" && echo 1 || echo 0)
+check depth "Factory references self-test evaluate.sh" $(factory_has "self-test")
 
 # Does consensus protocol have anti-patterns section?
 dim_depth_max=$((dim_depth_max + 1))
@@ -309,7 +329,7 @@ check robustness "Autoresearch contract handles baseline measurement failure" $(
 
 # Does factory address what happens when LLM API is unavailable?
 dim_robustness_max=$((dim_robustness_max + 1))
-check robustness "Factory addresses LLM API unavailability" $(grep -qic "fallback\|unavailable\|fail.*graceful\|deterministic.*only\|without.*LLM" "$FACTORY_SKILL" && echo 1 || echo 0)
+check robustness "Factory addresses LLM API unavailability" $(factory_has -i "fallback\|unavailable\|fail.*graceful\|deterministic.*only\|without.*LLM\|no LLM available")
 
 # Does autoresearch explain untracked file cleanup?
 dim_robustness_max=$((dim_robustness_max + 1))

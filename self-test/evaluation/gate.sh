@@ -30,7 +30,7 @@ ADVISORY_RE=''
 # reference over ~100 lines — so gutting a file can delete its own check and leave the suite green with
 # a smaller total. Comparing issues alone cannot catch that; a floor can. Raise this deliberately when
 # you add checks; lowering it is retiring coverage and needs the same scrutiny as ADVISORY_RE.
-MIN_CHECKS=86
+MIN_CHECKS=102
 
 # Explicit template: bare `mktemp -d` works on GNU and on current macOS, but older BSD mktemp wants one.
 # Costs nothing to be unambiguous in a script that advertises portability.

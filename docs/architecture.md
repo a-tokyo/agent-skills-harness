@@ -169,7 +169,7 @@ flowchart LR
 | Skill | Integration Type | When |
 |-------|-----------------|------|
 | skill-creator | Called as dependency, with fallback | Phase 3.3 authoring and Phase 4.6 description pass; without it, the 3.3 checklist and `references/standalone-fallback.md` |
-| autoresearch | Called as dependency | Phase 4: the upstream experimentation loop, run with the factory's METRIC, checks and jsonl conventions (`references/pipeline-phases.md`) |
+| autoresearch | Called as dependency | Phase 4: the upstream experimentation loop, run with the factory's METRIC, checks and jsonl conventions (`references/phase-4.md`) |
 | `claude plugin eval` | CLI, with fallback | Phase 3.6 builds a wrapper-plugin suite in `work/evaluation/plugin/`; Phase 5.0 runs it with and without the skill. Without Claude Code, `evaluate.sh` and the manual uplift benchmark |
 | premortem | Invoked directly | Phase 5: before panel evaluation |
 | handoff | Invoked directly | When context fatigues or session ends |
