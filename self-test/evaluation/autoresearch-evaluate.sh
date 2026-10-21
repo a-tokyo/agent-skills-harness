@@ -287,6 +287,10 @@ for ref in "references/phase-3.md" "references/phase-4.md" "references/phase-5.m
   dim_depth_max=$((dim_depth_max + 1))
   check depth "Router dispatches a worker with $ref" $(grep -qF "$ref" "$FACTORY_SKILL" && [ -f ".agents/skills/create-skill-autoresearch/$ref" ] && echo 1 || echo 0)
 done
+# Small study materials are read inline: a researcher spawn costs more than the reading
+dim_depth_max=$((dim_depth_max + 1))
+check depth "Router reads small study materials inline" $(grep -q "under 40 KB" "$FACTORY_SKILL" && echo 1 || echo 0)
+
 dim_depth_max=$((dim_depth_max + 1))
 check depth "Worker summary is bounded (<= 15 lines) in the dispatch prompt" $(grep -qi "at most 15 lines" "$FACTORY_SKILL" && echo 1 || echo 0)
 

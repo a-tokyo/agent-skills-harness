@@ -21,7 +21,7 @@ This file is the main session's router: it runs Phases 1-2 and the panel; Phases
 | Phase | What Happens | Who runs it | Detail |
 |-------|-------------|-------------|--------|
 | 1. Interview | Discover purpose, gold standards, scope | ORCHESTRATOR (main) | below; [references/pipeline-phases.md](references/pipeline-phases.md) |
-| 2. Research | Study domain materials, build dossier, propose rubric | RESEARCHER subagents (2-7) | below; [references/pipeline-phases.md](references/pipeline-phases.md) |
+| 2. Research | Study domain materials, build dossier, propose rubric | RESEARCHER subagents (2-7), or main inline | below; [references/pipeline-phases.md](references/pipeline-phases.md) |
 | 3. Draft | Design, author SKILL.md with skill-creator, eval script, split, baseline, eval suite | BUILDER: Phase 3 worker | [references/phase-3.md](references/phase-3.md) |
 | 4. Autoresearch | Iterate against gold standards (LLM-as-judge, or an objective real-world metric for procedural skills), then the description pass | BUILDER: Phase 4 worker + autoresearch skill | [references/phase-4.md](references/phase-4.md) |
 | 5. Verify | 5.0 eval gate (with vs without), 5.1 premortem; 5.2-5.4 panel, consensus, ship/iterate | Phase 5 worker; then PANEL (3 subagents) | [references/phase-5.md](references/phase-5.md); 5.2-5.4 below |
@@ -136,12 +136,14 @@ Do **not** ask the user to hand-author a manifest. Scan whatever is in `input/`,
 
 ## Phase 2: Research
 
-### 2.1 Spawn Researcher Subagents
+### 2.1 Research the Study Materials
 
-Cluster study materials by source type (existing skills, gold standard outputs, planning docs) or by
-subtopic, 2-7 clusters — fewer gives no parallelism, more costs synthesis without depth. Launch one read-only
-researcher subagent per cluster (a host without subagents runs each as a fresh headless session, in turn); each
-reads its material deeply and writes the patterns, conventions and quality signals it finds to `work/research/NN-<topic>.md`.
+**Small materials go inline**: when the study materials total under 40 KB (the sizes `ls -l` or `dir` lists), read
+them yourself and write the notes below directly — a researcher's spawn costs more than the reading. Otherwise cluster
+them by source type (existing skills, gold standard outputs, planning docs) or by subtopic, 2-7 clusters — fewer gives
+no parallelism, more costs synthesis without depth — and launch one read-only researcher subagent per cluster (a host
+without subagents runs each as a fresh headless session, in turn); each reads its material deeply and writes the
+patterns, conventions and quality signals it finds to `work/research/NN-<topic>.md`.
 
 ### 2.2 Synthesize Research
 
