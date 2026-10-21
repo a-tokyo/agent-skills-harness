@@ -416,12 +416,16 @@ def read_baseline(workspace: Path, key: str, runs: int) -> list[float] | None:
     return [float(s) for s in scores]
 
 
+def now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
 def log_attempt(workspace: Path, step: str, error: str | None = None) -> None:
     """Append one line to work/evaluation/gate-attempts.jsonl: `record` or `gate`, and the GateError that
     stopped it, if any. check_gate.py --finish reads it: an UNSHIPPED build must have tried the gate."""
     path = workspace / GATE_ATTEMPTS
     path.parent.mkdir(parents=True, exist_ok=True)
-    line = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "step": step, "error": error}
+    line = {"at": now(), "step": step, "error": error}
     with open(path, "a", encoding="utf-8") as fh:
         fh.write(json.dumps(line) + "\n")
 
