@@ -24,14 +24,17 @@ FALLBACK_REF=".agents/skills/create-skill-autoresearch/references/standalone-fal
 PHASE3_REF=".agents/skills/create-skill-autoresearch/references/phase-3.md"
 PHASE4_REF=".agents/skills/create-skill-autoresearch/references/phase-4.md"
 PHASE5_REF=".agents/skills/create-skill-autoresearch/references/phase-5.md"
+OPS_REF=".agents/skills/create-skill-autoresearch/references/operating-rules.md"
 # SKILL.md is the main session's router; phase detail lives in the phase files its workers read
-# (references/phase-3.md, phase-4.md, phase-5.md). Content checks read the factory's instructions as a
-# whole: the router plus the phase files it dispatches. Router-only checks still read $FACTORY_SKILL.
-FACTORY_DOCS=("$FACTORY_SKILL" "$PHASE3_REF" "$PHASE4_REF" "$PHASE5_REF")
+# (references/phase-3.md, phase-4.md, phase-5.md) plus the operating rules every session reads. Content
+# checks read the factory's instructions as a whole: the router, the operating rules and the phase files it
+# dispatches. Router-only checks still read $FACTORY_SKILL.
+FACTORY_DOCS=("$FACTORY_SKILL" "$OPS_REF" "$PHASE3_REF" "$PHASE4_REF" "$PHASE5_REF")
 factory_has() { grep -q "$@" "${FACTORY_DOCS[@]}" && echo 1 || echo 0; }
 # The factory runs the upstream autoresearch skill and owns the loop conventions it needs
-# (phase-4.md 4.1-4.3 + its Loop Conventions); convention checks read this contract.
-AR_CONTRACT_FILES=("$FACTORY_SKILL" "$PHASE4_REF")
+# (phase-4.md 4.1-4.3 + its Loop Conventions, whose git staging and owned-process rules live in
+# operating-rules.md); convention checks read this contract.
+AR_CONTRACT_FILES=("$FACTORY_SKILL" "$OPS_REF" "$PHASE4_REF")
 ar_count() { cat "${AR_CONTRACT_FILES[@]}" | grep -c "$@" || true; }
 ar_has() { grep -q "$@" "${AR_CONTRACT_FILES[@]}" && echo 1 || echo 0; }
 WORKSPACE_DOC="docs/reference/workspace-layout.md"
