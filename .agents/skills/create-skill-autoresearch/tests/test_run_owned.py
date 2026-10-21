@@ -123,17 +123,15 @@ class RunOwnedTest(TempWorkspace):
             stranger.wait()
 
     def test_a_command_that_ends_after_a_stop_request_records_no_exit_status(self) -> None:
-        """The race behind the flaky ps-denied test: the group TERM can end the command before it reaches the
-        wrapper, which then recorded an exit status and turned "stopped" into "exited"."""
-        rc_file, go, stop = (self.root / n for n in ("job.rc", "job.go", "job.stop"))
-        go.write_text("")
-        stop.write_text('{"grace": 5}')
-        self.assertEqual(run_owned._wrap([str(rc_file), "job", "token", str(go), str(stop), *py("raise SystemExit(143)")]),
-                         143)
-        self.assertFalse(rc_file.exists(), "a stopped job's status is the stop, not an exit code")
-        stop.unlink()
-        self.assertEqual(run_owned._wrap([str(rc_file), "job", "token", str(go), str(stop), *py("raise SystemExit(7)")]), 7)
-        self.assertEqual(rc_file.read_text().strip(), "7", "without a stop request the exit status is recorded")
+        """The race behind the flaky ps-denied test: the group TERM can end the command before the supervisor
+        acts on the stop request, which then recorded an exit status and turned "stopped" into "exited"."""
+        stop = self.ws / "work" / "pids" / "job.stop"
+        self.start("job", *py(f"open({str(stop)!r}, 'w').write('{{}}'); raise SystemExit(143)"))
+        self.assertEqual(self.run_script("run_owned.py", "wait", "job", "--timeout", "10").returncode, 125)
+        self.assertFalse((self.ws / "work" / "pids" / "job.rc").exists(), "a stopped job's status is the stop")
+        self.start("job", *py("raise SystemExit(7)"))
+        self.assertEqual(self.run_script("run_owned.py", "wait", "job", "--timeout", "10").returncode, 7,
+                         "without a stop request the exit status is recorded")
 
     def test_works_end_to_end_with_ps_denied(self) -> None:
         denied = self.root / "denied-ps"
