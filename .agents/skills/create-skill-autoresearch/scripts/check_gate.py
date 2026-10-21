@@ -416,7 +416,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"PANEL RECEIPT: {path.relative_to(workspace).as_posix()} ({role}, round "
                   f"{2 if args.synthesis else 1}) binds these scores to output/{verdict.skill}/ as it is now")
         elif args.consensus:
-            print(panel.write_consensus(workspace, verdict.skill, skill_sha)[1].line())
+            print(panel.write_consensus(workspace, verdict.skill, skill_sha).line())
         elif args.panel:
             n = panel.check_round(workspace, skill_sha)
             try:
