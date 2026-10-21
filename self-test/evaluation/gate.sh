@@ -100,10 +100,10 @@ if [ "$((passed + advisory_count))" -ne "$total" ]; then
   exit 1
 fi
 
-# The factory's bundled scripts (gate runner, validator, process wrapper) ship with offline tests:
-# a fake `claude` on PATH, fake run-case.sh adapters, temp workspaces. -B and the env var keep
+# The factory's bundled scripts (gate runner, validator, process wrapper) and hooks ship with offline tests
+# in <skill>/tests/: a fake `claude` on PATH, fake run-case.sh adapters, temp workspaces. -B and the env var keep
 # __pycache__ out of the shipped skill directory.
-SCRIPT_TESTS=".agents/skills/create-skill-autoresearch/scripts/tests"
+SCRIPT_TESTS=".agents/skills/create-skill-autoresearch/tests"
 echo ""
 echo "--- Script tests ---"
 if ! PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s "$SCRIPT_TESTS" >"$WORK/script-tests.txt" 2>&1; then

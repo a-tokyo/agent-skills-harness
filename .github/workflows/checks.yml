@@ -51,7 +51,7 @@ jobs:
         shell: bash
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-        run: python -B -m unittest discover -s .agents/skills/create-skill-autoresearch/scripts/tests -v
+        run: python -B -m unittest discover -s .agents/skills/create-skill-autoresearch/tests -v
 
   # One manual-protocol gate end to end on native Windows, with a stub executor: record, the detached
   # gate and its wait, check_gate.py, --panel and --finish. No claude and no network.

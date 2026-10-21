@@ -67,7 +67,7 @@ No build step required. Skills are markdown-based and used directly by any AI co
 
 To refresh a vendored skill, scope it: `npx skills update <skill-name>`. `npm run skills:refresh-all` does every one of them from each upstream's current HEAD and rewrites the lock entries — review that diff before committing, since an upstream edit changes how a companion behaves. `skills-lock.json` records provenance and a content hash; it is not a pin the CLI restores you to.
 
-`npm test` runs the regression gate (`self-test/evaluation/gate.sh`): the structural checks, failing on any failure not on its advisory list — which is currently empty on purpose, so the suite is expected to be fully green — then the offline tests of the factory's bundled scripts (`.agents/skills/create-skill-autoresearch/scripts/tests/`). It needs no credentials and no network.
+`npm test` runs the regression gate (`self-test/evaluation/gate.sh`): the structural checks, failing on any failure not on its advisory list — which is currently empty on purpose, so the suite is expected to be fully green — then the offline tests of the factory's bundled scripts and hooks (`.agents/skills/create-skill-autoresearch/tests/`). It needs no credentials and no network.
 
 ## Development Conventions
 
