@@ -56,14 +56,13 @@ already invalidate it). It prints `FAST PATH: ...` (skip the Phase 4 loop) or `N
     check_gate.py [--workspace DIR] [--skill NAME] [--json]
                   [--panel | --panel-receipt ROLE SCORES_JSON [--synthesis] | --consensus | --finish | --fast-path]
 
-Tested on macOS, Linux and Windows. Exit codes: 0 valid (--finish: finished), 1 invalid (unfinished), 2 usage error.
+Exit codes: 0 valid (--finish: finished), 1 invalid (unfinished), 2 usage error.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import locale
 import re
 import subprocess
 import sys
@@ -351,15 +350,6 @@ def validate(workspace: Path, skill: str | None = None) -> Verdict:
     )
 
 
-def _read_benchmark(path: Path) -> str:
-    """UTF-8, else the locale's encoding: an editor on Windows may save BENCHMARK.md in its code page."""
-    data = path.read_bytes()
-    try:
-        return data.decode("utf-8")
-    except UnicodeDecodeError:
-        return data.decode(locale.getpreferredencoding(False), errors="replace")
-
-
 def _spaced(text: str) -> str:
     return " ".join(text.split())
 
@@ -377,7 +367,7 @@ def finish(workspace: Path, skill: str | None = None) -> tuple[bool, str | None,
     bench = workspace / BENCHMARK
     if not bench.is_file():
         return False, None, f"no {BENCHMARK} at the build root; carry Phase 5 through 5.4 to a terminal verdict"
-    text = _read_benchmark(bench)
+    text = bench.read_text(encoding="utf-8", errors="replace")
     match = VERDICT_LINE.search(text)
     if not match:
         return False, None, f"{BENCHMARK} has no `Verdict: <label>` line (SHIP, SHIP WITH CAVEATS or UNSHIPPED)"

@@ -28,11 +28,16 @@ hooks/finish-guard runs it with whichever Python 3 the machine has.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 sys.dont_write_bytecode = True
+if os.name == "nt":  # the host gets its "allow" answer, so no shell call or turn is held
+    print("finish guard: native Windows is not supported; run the factory inside WSL", file=sys.stderr)
+    print("{}")
+    sys.exit(0)
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 CURSOR_EVENT = "stop"
 SUBAGENT_EVENTS = {"SubagentStop", "subagentStop"}

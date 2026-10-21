@@ -3,26 +3,22 @@
 
 Each job runs under a small supervisor (this script) that starts a wrapper (this script again); the
 wrapper runs the command and records its exit status atomically, so a later `wait` from any process
-can read it. On macOS and Linux the wrapper leads a new session and process group; on Windows the
-supervisor puts it in a Job Object, which every process it starts joins. The supervisor watches
+can read it. The wrapper leads a new session and process group. The supervisor watches
 work/pids/<name>.stop: `stop` writes that file and waits; the supervisor ends only its own job and
-exits. macOS/Linux: TERM to the group, KILL after the grace period. Windows has no TERM: the job may
-exit on its own when the stop file (its path is in $RUN_OWNED_STOP_FILE) appears, and the Job Object
-is terminated after the grace period. No process identity from outside is needed, so stop works where
-`ps` is missing or denied (agent sandboxes), and it can never reach a sibling build or the user's own
-processes the way `pkill`/`killall`/`taskkill /IM` and other pattern kills do.
+exits: TERM to the group, KILL after the grace period. No process identity from outside is needed, so
+stop works where `ps` is missing or denied (agent sandboxes), and it can never reach a sibling build or
+the user's own processes the way `pkill`/`killall` and other pattern kills do.
 
 The supervisor holds an exclusive lock on work/pids/<name>.lock for as long as it runs: a held lock is
 a live job. `start` holds work/pids/<name>.start.lock from its state check until the record is
 written, so concurrent starts of one name run it once and a start while the job is live is refused;
 the wrapper runs the command only once the record exists. Only if the supervisor is gone while the
-job's leader still runs does `stop` fall back to the recorded leader (macOS/Linux: its group; Windows:
-`taskkill /PID <leader> /T`), and only after its start time (`ps` or GetProcessTimes) matches the
-record; when it cannot (no start time, a reused pid) it refuses, and `start` refuses to overwrite it.
+job's leader still runs does `stop` fall back to the recorded leader's group, and only after its start
+time (`ps`) matches the record; when it cannot (no start time, a reused pid) it refuses, and `start` refuses to overwrite it.
 
-The record, work/pids/<name>.json, holds the pids, the pgid (the leader's pid on Windows), the leader's
-start time, a token and the command. The job sees RUN_OWNED_JOB=<name>, RUN_OWNED_PGID=<the leader's
-pid>, RUN_OWNED_TOKEN=<the record's token> and RUN_OWNED_STOP_FILE in its environment. `start` keeps
+The record, work/pids/<name>.json, holds the pids, the pgid, the leader's start time, a token and the
+command. The job sees RUN_OWNED_JOB=<name>, RUN_OWNED_PGID=<the leader's pid> and
+RUN_OWNED_TOKEN=<the record's token> in its environment. `start` keeps
 work/pids/ out of git (it writes a `.gitignore` of `*` there).
 
     run_owned.py start <name> [--cwd DIR] [--log FILE] -- <cmd...>
@@ -31,7 +27,7 @@ work/pids/ out of git (it writes a `.gitignore` of `*` there).
     run_owned.py status <name>
 
 Paths are relative to --workspace (default: the current directory); records go to
-<workspace>/work/pids/. Needs Python 3.9+ on macOS, Linux or Windows (stdlib only; `ps` is optional).
+<workspace>/work/pids/. Needs Python 3.9+ on macOS, Linux or WSL (stdlib only; `ps` is optional).
 
 Exit codes: 0 success (wait: the job exited 0); the job's own exit code from wait; 2 usage error;
 3 state error (no record, name already running, a job this script cannot verify or refuses to
@@ -46,7 +42,6 @@ import json
 import os
 import re
 import secrets
-import shutil
 import signal
 import subprocess
 import sys
@@ -55,13 +50,9 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-WINDOWS = os.name == "nt"
-if WINDOWS:
-    import ctypes
-    import msvcrt
-    from ctypes import wintypes
-else:
-    import fcntl
+if os.name == "nt":
+    sys.exit("native Windows is not supported; run the factory inside WSL")
+import fcntl  # noqa: E402
 
 EXIT_STATE = 3
 EXIT_TIMEOUT = 124
@@ -72,8 +63,7 @@ POLL_SECONDS = 0.2
 LOCK_RETRY_SECONDS = 1.0
 # A start waits this long for a concurrent start of the same name to finish, then sees its live job.
 START_LOCK_SECONDS = 30.0
-# Time for the supervisor to start Python and the wrapper and report its pid; a cold Python start on
-# Windows (antivirus scanning a new process) can take several seconds.
+# Time for the supervisor to start Python and the wrapper and report its pid.
 READY_SECONDS = 15.0
 # The wrapper waits this long for `start` to write the record before giving up on the command.
 GO_SECONDS = 30.0
@@ -83,7 +73,7 @@ SUPERVISE = "_supervise"
 WRAP = "_wrap"
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 TERM = signal.SIGTERM
-KILL = getattr(signal, "SIGKILL", 9)
+KILL = signal.SIGKILL
 
 
 class OwnedError(Exception):
@@ -132,24 +122,10 @@ def _stop_path(sdir: Path, name: str) -> Path:
     return sdir / f"{name}.stop"
 
 
-def _replace(src: Path, dst: Path) -> None:
-    """os.replace; on Windows a reader holding dst open makes it fail for a moment, so retry briefly
-    (50 x 20 ms: a second for the reader to let go)."""
-    for _ in range(50):
-        try:
-            os.replace(src, dst)
-            return
-        except PermissionError:
-            if not WINDOWS:
-                raise
-            time.sleep(0.02)
-    os.replace(src, dst)
-
-
 def _write_text(path: Path, text: str) -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(text, encoding="utf-8")
-    _replace(tmp, path)
+    os.replace(tmp, path)
 
 
 def _write_json(path: Path, data: dict) -> None:
@@ -166,16 +142,9 @@ def load(sdir: Path, name: str) -> Record:
         raise OwnedError(f"unreadable record {path}: {exc}") from exc
 
 
-# --- locks: flock on macOS/Linux, msvcrt.locking on Windows; both end with the process ---------------
+# --- locks: flock, released when the holding process exits ------------------------------------------
 
 def _try_lock(fd: int) -> bool:
-    if WINDOWS:
-        try:
-            os.lseek(fd, 0, os.SEEK_SET)
-            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
-        except OSError:
-            return False
-        return True
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
@@ -209,46 +178,8 @@ def supervised(sdir: Path, name: str) -> bool:
 
 # --- process identity and signals --------------------------------------------------------------------
 
-if WINDOWS:
-    _K32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    _K32.OpenProcess.restype = wintypes.HANDLE
-    _K32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
-    _K32.CloseHandle.argtypes = (wintypes.HANDLE,)
-    _K32.WaitForSingleObject.restype = wintypes.DWORD
-    _K32.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
-    _K32.GetProcessTimes.argtypes = (wintypes.HANDLE,) + (ctypes.POINTER(wintypes.FILETIME),) * 4
-    _K32.CreateJobObjectW.restype = wintypes.HANDLE
-    _K32.CreateJobObjectW.argtypes = (wintypes.LPVOID, wintypes.LPCWSTR)
-    _K32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
-    _K32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
-    _K32.QueryInformationJobObject.argtypes = (wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD,
-                                               ctypes.POINTER(wintypes.DWORD))
-    _QUERY = 0x1000  # PROCESS_QUERY_LIMITED_INFORMATION
-    _SYNCHRONIZE = 0x00100000
-    _WAIT_TIMEOUT = 0x102
-    _ACCESS_DENIED = 5
-    _JOB_ACCOUNTING = 1  # JobObjectBasicAccountingInformation
-
-    class _Accounting(ctypes.Structure):
-        _fields_ = [("TotalUserTime", ctypes.c_int64), ("TotalKernelTime", ctypes.c_int64),
-                    ("ThisPeriodTotalUserTime", ctypes.c_int64), ("ThisPeriodTotalKernelTime", ctypes.c_int64),
-                    ("TotalPageFaultCount", wintypes.DWORD), ("TotalProcesses", wintypes.DWORD),
-                    ("ActiveProcesses", wintypes.DWORD), ("TotalTerminatedProcesses", wintypes.DWORD)]
-
-
 def _lstart(pid: int) -> str | None:
-    """The process's start time as an opaque string (`ps -o lstart`, or the creation FILETIME on Windows)."""
-    if WINDOWS:
-        handle = _K32.OpenProcess(_QUERY, False, pid)
-        if not handle:
-            return None
-        try:
-            times = [wintypes.FILETIME() for _ in range(4)]
-            if not _K32.GetProcessTimes(handle, *(ctypes.byref(t) for t in times)):
-                return None
-            return str((times[0].dwHighDateTime << 32) | times[0].dwLowDateTime)
-        finally:
-            _K32.CloseHandle(handle)
+    """The process's start time as an opaque string (`ps -o lstart`)."""
     try:
         out = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)], capture_output=True, text=True,
                              timeout=10)  # `ps -p` answers at once; ten seconds bounds a stalled one
@@ -259,15 +190,6 @@ def _lstart(pid: int) -> str | None:
 
 
 def _pid_alive(pid: int) -> bool:
-    if WINDOWS:
-        # Never os.kill(pid, 0) here: on Windows it terminates the process.
-        handle = _K32.OpenProcess(_SYNCHRONIZE | _QUERY, False, pid)
-        if not handle:
-            return ctypes.get_last_error() == _ACCESS_DENIED
-        try:
-            return _K32.WaitForSingleObject(handle, 0) == _WAIT_TIMEOUT
-        finally:
-            _K32.CloseHandle(handle)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -279,9 +201,7 @@ def _pid_alive(pid: int) -> bool:
 
 def _group_alive(pgid: int) -> bool:
     """True while the group has a member we can signal. macOS answers EPERM for a group whose
-    only members are zombies, so EPERM counts as nothing left to stop. Windows: the leader runs."""
-    if WINDOWS:
-        return _pid_alive(pgid)
+    only members are zombies, so EPERM counts as nothing left to stop."""
     try:
         os.killpg(pgid, 0)
     except (ProcessLookupError, PermissionError):
@@ -289,45 +209,11 @@ def _group_alive(pgid: int) -> bool:
     return True
 
 
-def _kill_tree(pid: int) -> None:
-    """Windows only: force-end the process and its descendants by PID (never by name)."""
-    taskkill = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "taskkill.exe"
-    try:
-        subprocess.run([str(taskkill), "/PID", str(pid), "/T", "/F"], stdin=subprocess.DEVNULL,
-                       capture_output=True, timeout=60)  # /T walks the whole tree; a minute bounds a stalled one
-    except (OSError, subprocess.TimeoutExpired):
-        pass
-
-
 def _signal_group(pgid: int, sig: int) -> None:
-    if WINDOWS:
-        if sig == KILL:
-            _kill_tree(pgid)
-        return
     try:
         os.killpg(pgid, sig)
     except (ProcessLookupError, PermissionError):
         pass
-
-
-class _Job:
-    """A Windows Job Object holding the wrapper and everything it starts."""
-
-    def __init__(self) -> None:
-        self.handle = _K32.CreateJobObjectW(None, None) or None
-
-    def assign(self, proc: subprocess.Popen) -> bool:
-        return bool(self.handle) and bool(_K32.AssignProcessToJobObject(self.handle, int(proc._handle)))
-
-    def active(self) -> int:
-        info = _Accounting()
-        if not _K32.QueryInformationJobObject(self.handle, _JOB_ACCOUNTING, ctypes.byref(info),
-                                              ctypes.sizeof(info), None):
-            return 0
-        return info.ActiveProcesses
-
-    def terminate(self) -> None:
-        _K32.TerminateJobObject(self.handle, 1)
 
 
 def _leader_state(rec: Record) -> str:
@@ -395,20 +281,6 @@ def start(sdir: Path, name: str, cmd: list[str], cwd: Path, log: Path | None = N
         os.close(start_fd)
 
 
-def _detached(argv: list[str], cwd: Path, env: dict[str, str] | None, log_fh) -> subprocess.Popen:
-    """The supervisor, outside the caller's session (macOS/Linux) or console and job (Windows), so it
-    outlives the shell call that started it."""
-    common = dict(cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=log_fh, stderr=subprocess.STDOUT)
-    if not WINDOWS:
-        return subprocess.Popen(argv, start_new_session=True, **common)
-    flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-    try:
-        return subprocess.Popen(argv, creationflags=flags | subprocess.CREATE_BREAKAWAY_FROM_JOB, **common)
-    except OSError:
-        # The caller's job forbids breakaway; the supervisor stays in it.
-        return subprocess.Popen(argv, creationflags=flags, **common)
-
-
 def _spawn(sdir: Path, name: str, path: Path, cmd: list[str], cwd: Path, log: Path | None,
            env: dict[str, str] | None) -> subprocess.Popen:
     log_path = (log or sdir / f"{name}.log").resolve()
@@ -422,7 +294,9 @@ def _spawn(sdir: Path, name: str, path: Path, cmd: list[str], cwd: Path, log: Pa
     argv = [sys.executable, "-B", str(Path(__file__).resolve()), SUPERVISE, str(ready_file), str(rc_file), name,
             str(stop_file), str(go_file), token, str(_lock_path(sdir, name).resolve()), *cmd]
     with open(log_path, "wb") as log_fh:
-        proc = _detached(argv, cwd, env, log_fh)
+        # Its own session, so the supervisor outlives the shell call that started it.
+        proc = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=log_fh,
+                                stderr=subprocess.STDOUT, start_new_session=True)
     pid = _await_ready(ready_file, proc)
     if pid is None:
         proc.kill()
@@ -453,8 +327,8 @@ def _await_ready(ready_file: Path, proc: subprocess.Popen) -> int | None:
 # --- the supervisor and the wrapper (internal subcommands) ------------------------------------------
 
 def _supervise(argv: list[str]) -> int:
-    """The supervisor: take the name's lock, run the wrapper in its own group (Windows: Job Object),
-    stop it on request, then exit. The lock is held until this process exits."""
+    """The supervisor: take the name's lock, run the wrapper in its own group, stop it on request, then
+    exit. The lock is held until this process exits."""
     ready_file, rc_file, name, stop_file, go_file, token, lock_path = argv[:7]
     cmd, stop_file = argv[7:], Path(stop_file)
     lock_fd = _lock(Path(lock_path), READY_SECONDS)
@@ -462,26 +336,16 @@ def _supervise(argv: list[str]) -> int:
         print(f"run_owned: job {name!r} is already running (its supervisor holds {lock_path})", file=sys.stderr)
         return EXIT_STATE
     signalled: list[int] = []
-    for sig in (TERM, getattr(signal, "SIGHUP", None), signal.SIGINT, getattr(signal, "SIGBREAK", None)):
-        if sig is not None:
-            signal.signal(sig, lambda signum, _frame: signalled.append(signum))
+    for sig in (TERM, signal.SIGHUP, signal.SIGINT):
+        signal.signal(sig, lambda signum, _frame: signalled.append(signum))
     wrapper = [sys.executable, "-B", str(Path(__file__).resolve()), WRAP, rc_file, name, token, go_file,
                str(stop_file), *cmd]
-    job = None
-    if WINDOWS:
-        child = subprocess.Popen(wrapper, stdin=subprocess.DEVNULL,
-                                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW)
-        job = _Job()
-        if not job.assign(child):
-            print("run_owned: no Job Object for this job; stop falls back to taskkill /PID /T", file=sys.stderr)
-            job = None
-    else:
-        child = subprocess.Popen(wrapper, stdin=subprocess.DEVNULL, start_new_session=True)
+    child = subprocess.Popen(wrapper, stdin=subprocess.DEVNULL, start_new_session=True)
     _write_json(Path(ready_file), {"pid": child.pid})
     while child.poll() is None:
         if signalled or stop_file.exists():
             grace = _requested_grace(stop_file)
-            outcome = _terminate(child, job, grace)
+            outcome = _terminate(child, grace)
             _write_json(stop_file, {"grace": grace, "outcome": outcome})
             return 0
         time.sleep(POLL_SECONDS)
@@ -499,11 +363,9 @@ def _wrap(argv: list[str]) -> int:
             print(f"run_owned: job {name!r} was never recorded; the command did not run", file=sys.stderr)
             return EXIT_NO_STATUS
         time.sleep(0.02)  # start writes the go file right after the record; a short poll keeps start fast
-    env = {**os.environ, "RUN_OWNED_JOB": name, "RUN_OWNED_PGID": str(os.getpid()), "RUN_OWNED_TOKEN": token,
-           "RUN_OWNED_STOP_FILE": stop_file}
-    exe = (shutil.which(cmd[0]) or cmd[0]) if WINDOWS else cmd[0]
+    env = {**os.environ, "RUN_OWNED_JOB": name, "RUN_OWNED_PGID": str(os.getpid()), "RUN_OWNED_TOKEN": token}
     try:
-        child = subprocess.Popen([exe, *cmd[1:]], stdin=subprocess.DEVNULL, env=env)
+        child = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, env=env)
     except OSError as exc:
         print(f"run_owned: cannot run {cmd[0]!r}: {exc}", file=sys.stderr)
         rc = 127
@@ -525,27 +387,16 @@ def _requested_grace(stop_file: Path) -> float:
         return 10.0
 
 
-def _terminate(child: subprocess.Popen, job: _Job | None, grace: float) -> str:
-    """End the child's job: macOS/Linux TERM its group, KILL after `grace` (the child is ours and
-    unreaped, so its pgid is too); Windows waits `grace` for it to exit, then ends the Job Object."""
-    if WINDOWS:
-        def alive() -> bool:
-            return job.active() > 0 if job else child.poll() is None
-    else:
-        _signal_group(child.pid, TERM)
-
-        def alive() -> bool:
-            return _group_alive(child.pid)
+def _terminate(child: subprocess.Popen, grace: float) -> str:
+    """TERM the child's group, KILL after `grace` (the child is ours and unreaped, so its pgid is too)."""
+    _signal_group(child.pid, TERM)
     deadline = time.monotonic() + grace
-    while alive() and time.monotonic() < deadline:
+    while _group_alive(child.pid) and time.monotonic() < deadline:
         child.poll()
         time.sleep(POLL_SECONDS / 2)
     outcome = "stopped"
-    if alive():
-        if job:
-            job.terminate()
-        else:
-            _signal_group(child.pid, KILL)
+    if _group_alive(child.pid):
+        _signal_group(child.pid, KILL)
         outcome = "killed"
     child.wait()
     return outcome
@@ -586,7 +437,7 @@ class _Target:
 
 def _target(sdir: Path, name: str, proc: subprocess.Popen | None) -> _Target:
     rec = load(sdir, name)
-    own = os.getpid() if WINDOWS else os.getpgrp()
+    own = os.getpgrp()
     if rec.pgid <= 1 or rec.pgid == own:
         raise OwnedError(f"refusing to signal pgid {rec.pgid}: not a group run_owned created")
     if rec.stopped is not None or exit_status(rec) is not None:
@@ -605,11 +456,9 @@ def _target(sdir: Path, name: str, proc: subprocess.Popen | None) -> _Target:
 
 def _leads_its_group(rec: Record) -> bool:
     """The fallback signals rec.pgid once pid and start time match, so the group must be the verified
-    leader's own: run_owned makes the leader its group's leader (Windows: pgid is the leader's pid)."""
+    leader's own: run_owned makes the leader its group's leader."""
     if rec.pgid != rec.pid:
         return False
-    if WINDOWS:
-        return True
     try:
         return os.getpgid(rec.pid) == rec.pgid
     except OSError:
@@ -618,8 +467,7 @@ def _leads_its_group(rec: Record) -> bool:
 
 def stop_many(sdir: Path, jobs: list[tuple[str, subprocess.Popen | None]], grace: float = 10.0) -> list[str]:
     """Stop every named job at once: a supervised job through its stop file; a job whose supervisor is
-    gone through its stop file and TERM to its verified group, KILL after `grace` (Windows: taskkill
-    /PID <leader> /T). Each name is checked before anything is signalled or written. Pass a job's Popen
+    gone through its stop file and TERM to its verified group, KILL after `grace`. Each name is checked before anything is signalled or written. Pass a job's Popen
     (its supervisor) when this process started it, so it is reaped. Returns one outcome line per job;
     raises OwnedError if a supervisor did not confirm."""
     targets = [_target(sdir, name, proc) for name, proc in jobs]

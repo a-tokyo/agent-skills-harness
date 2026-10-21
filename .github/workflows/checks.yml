@@ -30,16 +30,11 @@ jobs:
       - name: Run the gate
         run: bash self-test/evaluation/gate.sh
 
-  # The factory's scripts and kill guard run on every host OS a builder may use; the gate above covers
-  # Linux. Windows runs the same tests natively (Job Objects, msvcrt locks, Git Bash for run-case.sh),
-  # on a Python that does not default to UTF-8, so a missing encoding shows up here.
+  # The factory's scripts and kill guard run on macOS and Linux (WSL included); the gate above covers
+  # Linux, this job macOS.
   script-tests:
-    name: factory script tests (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest]
+    name: factory script tests (macos-latest)
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
 
@@ -48,27 +43,20 @@ jobs:
           python-version: "3.12"
 
       - name: Run the factory's script tests
-        shell: bash
         env:
           PYTHONDONTWRITEBYTECODE: "1"
         run: python -B -m unittest discover -s .agents/skills/create-skill-autoresearch/tests -v
 
-  # One manual-protocol gate end to end on native Windows, with a stub executor: record, the detached
-  # gate and its wait, check_gate.py, --panel and --finish. No claude and no network.
+  # One manual-protocol gate end to end with a stub executor: record, the detached gate and its wait,
+  # check_gate.py, --panel and --finish. No claude and no network.
   gate-smoke:
-    name: manual gate smoke (windows-latest)
-    runs-on: windows-latest
+    name: manual gate smoke (ubuntu-latest)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
       - name: Run one manual gate with a stub run-case.sh
-        shell: bash
         env:
-          PYTHON: python
           PYTHONDONTWRITEBYTECODE: "1"
         run: bash .github/scripts/gate-smoke.sh
 

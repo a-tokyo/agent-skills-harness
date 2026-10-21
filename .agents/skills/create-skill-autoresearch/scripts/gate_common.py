@@ -32,13 +32,13 @@ import json
 import os
 import re
 import sys
-import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
-# POSIX-style relative paths, so messages and records read the same on Windows; `workspace / EVAL_DIR`
-# still yields a native path.
+if os.name == "nt":
+    sys.exit("native Windows is not supported; run the factory inside WSL")
+
 EVAL_DIR = PurePosixPath("work") / "evaluation"
 PLUGIN_ARTIFACT = EVAL_DIR / "plugin-eval.json"
 MANUAL_ARTIFACT = EVAL_DIR / "uplift.json"
@@ -280,7 +280,7 @@ def omitted_gold(ws: Path, listed: list[str]) -> list[str]:
 
 
 def utf8_stdio() -> None:
-    """Case names and claude's output may be non-ASCII; Windows pipes default to a legacy code page."""
+    """Case names and claude's output may be non-ASCII, whatever the locale's encoding."""
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
@@ -444,15 +444,6 @@ def read_attempts(workspace: Path) -> list[dict]:
 def write_text(path: Path, text: str) -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(text, encoding="utf-8")
-    for _ in range(50):
-        try:
-            os.replace(tmp, path)
-            return
-        except PermissionError:
-            # Windows: a reader holding path open blocks the replace for a moment (50 x 20 ms: a second).
-            if os.name != "nt":
-                raise
-            time.sleep(0.02)
     os.replace(tmp, path)
 
 

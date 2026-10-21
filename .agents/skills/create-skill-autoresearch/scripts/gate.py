@@ -71,9 +71,8 @@ check_gate.py, and writes nothing outside work/evaluation/ and work/pids/.
             [--timeout 5400] [--case-timeout 1200] [--detach] [--restart]
     gate.py --stop [--workspace DIR]
 
-run-case.sh receives GATE_MODEL, GATE_RUN and GATE_EXECUTOR in its environment and runs from the workspace root; on
-Windows the gate runs it with Git for Windows' bash (CLAUDE_CODE_GIT_BASH_PATH, else bash on PATH or the
-default Git install; WSL's bash.exe is skipped). Tested on macOS, Linux and Windows.
+run-case.sh receives GATE_MODEL, GATE_RUN and GATE_EXECUTOR in its environment and runs from the workspace root.
+Tested on macOS and Linux (WSL included).
 
 Exit codes: 0 complete and valid (--detach, --restart, --stop: started or stopped); 1 the gate ran but the artifact is
 missing, partial or invalid (the message says why); 2 usage error; 3 a precondition is missing
@@ -160,42 +159,12 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _claude() -> str | None:
-    """The claude executable on PATH; on Windows npm installs it as claude.cmd, which only PATHEXT finds."""
-    return shutil.which("claude")
-
-
-def _git_bash() -> str | None:
-    """Windows: Git for Windows' bash.exe, never WSL's launcher in System32."""
-    system32 = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32"
-    candidates = [os.environ.get("CLAUDE_CODE_GIT_BASH_PATH"), shutil.which("bash")]
-    candidates += [str(Path(os.environ[var]).joinpath(*rest)) for var, *rest in (
-        ("ProgramFiles", "Git", "bin", "bash.exe"), ("ProgramFiles(x86)", "Git", "bin", "bash.exe"),
-        ("LOCALAPPDATA", "Programs", "Git", "bin", "bash.exe")) if os.environ.get(var)]
-    for candidate in candidates:
-        if candidate and Path(candidate).is_file() and Path(candidate).parent.resolve() != system32.resolve():
-            return candidate
-    return None
-
-
-def _adapter_argv(ws: Path) -> list[str]:
-    adapter = (ws / RUN_CASE).resolve()
-    if os.name != "nt":
-        return [str(adapter)]
-    bash = _git_bash()
-    if bash is None:
-        raise GateError(f"manual mode on Windows runs {RUN_CASE} with Git for Windows' bash, and none was found; "
-                        "install Git for Windows or set CLAUDE_CODE_GIT_BASH_PATH to its bash.exe")
-    return [bash, adapter.as_posix()]
-
-
 def probe_plugin_eval() -> int:
     """Exit code of `claude plugin eval --help`: 127 if claude is missing, 124 on timeout."""
-    claude = _claude()
-    if claude is None:
+    if shutil.which("claude") is None:
         return 127
     try:
-        return subprocess.run([claude, "plugin", "eval", "--help"], stdin=subprocess.DEVNULL,
+        return subprocess.run(["claude", "plugin", "eval", "--help"], stdin=subprocess.DEVNULL,
                               capture_output=True, timeout=PROBE_TIMEOUT).returncode
     except FileNotFoundError:
         return 127
@@ -248,7 +217,7 @@ def load_check(ws: Path) -> None:
     load (a `✗` line) and stops before the first run, spending nothing. A case that fails to load is
     otherwise skipped silently and the artifact misses it. Fails only on reported load errors."""
     with tempfile.TemporaryDirectory(prefix="gate-load-check-") as tmp:
-        cmd = [_claude() or "claude", "plugin", "eval", ".", "--max-cost-usd", "0", "--ablation", "none", "--trust-plugin",
+        cmd = ["claude", "plugin", "eval", ".", "--max-cost-usd", "0", "--ablation", "none", "--trust-plugin",
                "--no-publish", "--output-dir", tmp, "--report", str(Path(tmp) / "report.html"),
                "--json", str(Path(tmp) / "load-check.json")]
         try:
@@ -389,7 +358,6 @@ def check_adapter(ws: Path, args: argparse.Namespace) -> None:
     adapter = ws / RUN_CASE
     if not adapter.is_file() or not os.access(adapter, os.X_OK):
         raise GateError(f"{RUN_CASE} is missing or not executable; 3.6 writes it (chmod +x)")
-    _adapter_argv(ws)
     if args.executor is None:
         raise GateError("manual mode: pass --executor single-call or agentic (recorded in uplift.json)")
 
@@ -428,7 +396,7 @@ def run_plugin(ws: Path, skill: str, args: argparse.Namespace) -> None:
         shutil.rmtree(copy)
     shutil.copytree(ws / "output" / skill, copy)
 
-    cmd = [_claude() or "claude", "plugin", "eval", ".", "--ablation", "with-without", "--runs", str(args.runs),
+    cmd = ["claude", "plugin", "eval", ".", "--ablation", "with-without", "--runs", str(args.runs),
            "-j", str(args.jobs), "--model", args.model, "--allow-tools", *args.allow_tools,
            "--scaffold", "--trust-plugin", "--no-publish", "--threshold", "0",
            "--json", str((ws / PLUGIN_ARTIFACT).resolve())]
@@ -460,7 +428,7 @@ def _one_run(ws: Path, idx: int, case: str, arm: str, run: int, args: argparse.N
     error, log = "not run", ""
     for attempt in range(1, ATTEMPTS + 1):
         name = f"gate-c{idx:02d}-{arm}-r{run}-a{attempt}"
-        rc, log = run_owned_job(sdir, name, [*_adapter_argv(ws), case, arm], ws, args.case_timeout, env)
+        rc, log = run_owned_job(sdir, name, [str((ws / RUN_CASE).resolve()), case, arm], ws, args.case_timeout, env)
         if rc is None:
             error = f"timed out after {args.case_timeout:g}s"
             continue
@@ -555,25 +523,9 @@ def cache_baselines(ws: Path, fresh: dict[str, tuple[str, list[float]]], args: a
                           "runs": scores, "written": _now()})
 
 
-def _watch_stop_file() -> None:
-    """run_owned's stop file asks the job to stop; on Windows it is the only request before the Job
-    Object ends, so the gate stops its eval runs itself while the grace period lasts."""
-    stop_file = os.environ.get("RUN_OWNED_STOP_FILE")
-    if not stop_file:
-        return
-
-    def watch() -> None:
-        while not _STOP.wait(POLL_SECONDS):
-            if os.path.exists(stop_file):
-                _STOP.set()
-
-    threading.Thread(target=watch, daemon=True).start()
-
-
 def run_gate(ws: Path, args: argparse.Namespace) -> int:
     """The gate itself; runs inside the owned `gate` job."""
     signal.signal(signal.SIGTERM, lambda *_: _STOP.set())
-    _watch_stop_file()
     try:
         skill, cases, mode, available, invoked = preconditions(ws, args)
         artifact = PLUGIN_ARTIFACT if mode == "plugin" else MANUAL_ARTIFACT
@@ -663,7 +615,7 @@ def _job_argv(ws: Path, args: argparse.Namespace) -> list[str]:
     return argv
 
 
-PYTHON = f'"{sys.executable}"' if os.name == "nt" else "python3"
+PYTHON = "python3"
 
 
 def _wait_hint(ws: Path) -> str:

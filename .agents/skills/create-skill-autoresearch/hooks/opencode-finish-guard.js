@@ -13,7 +13,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const GUARD = process.env.CSA_FINISH_GUARD || join(dirname(realpathSync(fileURLToPath(import.meta.url))), "finish_guard.py");
-const PYTHONS = process.platform === "win32" ? [["py", "-3"], ["python"], ["python3"]] : [["python3"], ["python"]];
+const PYTHONS = [["python3"], ["python"]];
 
 export const FinishGuard = async ({ client, directory }) => {
   if (!existsSync(GUARD)) {
@@ -36,7 +36,7 @@ export const FinishGuard = async ({ client, directory }) => {
       for (const [bin, ...args] of PYTHONS) {
         let reply;
         try {
-          reply = JSON.parse(execFileSync(bin, [...args, GUARD], { input, encoding: "utf8", windowsHide: true, timeout: 30000 }));
+          reply = JSON.parse(execFileSync(bin, [...args, GUARD], { input, encoding: "utf8", timeout: 30000 }));
         } catch {
           continue;
         }

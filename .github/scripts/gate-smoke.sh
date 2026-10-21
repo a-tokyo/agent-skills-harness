@@ -3,10 +3,9 @@
 # the executor, then a stub panel: gate.py record, the detached gate and its --wait, a re-gate that reuses the
 # cached without arm, check_gate.py, --panel,
 # three --panel-receipt calls, --consensus, --finish, and the finish guard before and after. No claude, no
-# network, no secrets. CI runs it on windows-latest, where gate.py runs run-case.sh through Git for
-# Windows' bash and run_owned.py owns the gate through a Job Object.
+# network, no secrets. CI runs it on ubuntu-latest.
 #
-#   PYTHON=python bash .github/scripts/gate-smoke.sh
+#   bash .github/scripts/gate-smoke.sh
 set -euo pipefail
 # The smoke plays another host: inside Claude Code, gate.py refuses --backend manual for a model-invoked skill.
 unset CLAUDECODE
@@ -16,11 +15,9 @@ skill="$(cd "$(dirname "$0")/../../.agents/skills/create-skill-autoresearch" && 
 scripts="$skill/scripts"
 ws="$(mktemp -d)"
 trap 'rm -rf "$ws" || true' EXIT
-native() { cygpath -w "$1" 2>/dev/null || printf '%s\n' "$1"; }
-run() { "$py" -B "$(native "$scripts/$1")" --workspace "$(native "$ws")" "${@:2}"; }
+run() { "$py" -B "$scripts/$1" --workspace "$ws" "${@:2}"; }
 guard() { printf '{"hook_event_name": "Stop", "stop_hook_active": false, "cwd": %s}' \
-  "$("$py" -c 'import json, sys; print(json.dumps(sys.argv[1]))' "$(native "$ws")")" \
-  | "$py" -B "$(native "$skill/hooks/finish_guard.py")"; }
+  "$("$py" -c 'import json, sys; print(json.dumps(sys.argv[1]))' "$ws")" | "$py" -B "$skill/hooks/finish_guard.py"; }
 
 mkdir -p "$ws/output/demo" "$ws/input" "$ws/work/evaluation"
 printf -- '---\nname: demo\ndescription: Demo skill for the gate smoke test.\n---\n# Demo\n' > "$ws/output/demo/SKILL.md"
@@ -62,7 +59,7 @@ mkdir -p "$ws/work/experiments/panel"
 for role in verifier-a verifier-b devils-advocate; do
   scores="$ws/work/experiments/panel/$role.scores.json"
   printf '{"scores": {"correctness": {"score": 8, "confidence": 0.9, "evidence": "Demo"}, "clarity": {"score": 8, "confidence": 0.9, "evidence": "Demo"}}, "pass_recommendation": "SHIP_WITH_CAVEATS", "escalation": null}\n' > "$scores"
-  run check_gate.py --panel-receipt "$role" "$(native "$scores")"
+  run check_gate.py --panel-receipt "$role" "$scores"
 done
 consensus="$(run check_gate.py --consensus)"
 echo "$consensus"

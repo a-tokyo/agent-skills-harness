@@ -6,7 +6,7 @@
 //
 // OpenCode treats every export of a plugin module as a plugin, so this module exports only KillGuard.
 // Before every bash tool call it sends the command to kill_guard.py as a PreToolUse event, with the
-// first Python 3 that runs (python3, python; on Windows py -3 first); exit 2 blocks the call by
+// first Python 3 that runs (python3, python); exit 2 blocks the call by
 // throwing, which OpenCode reports to the agent. If no Python runs, the call is let through with a
 // warning: the guard must never stop every shell call.
 import { execFileSync } from "node:child_process";
@@ -15,19 +15,19 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const GUARD = process.env.CSA_KILL_GUARD || join(dirname(realpathSync(fileURLToPath(import.meta.url))), "kill_guard.py");
-const PYTHONS = process.platform === "win32" ? [["py", "-3"], ["python"], ["python3"]] : [["python3"], ["python"]];
+const PYTHONS = [["python3"], ["python"]];
 
 function check(command) {
   const input = JSON.stringify({ tool_name: "Bash", tool_input: { command } });
   for (const [bin, ...args] of PYTHONS) {
     try {
-      execFileSync(bin, [...args, GUARD], { input, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+      execFileSync(bin, [...args, GUARD], { input, stdio: ["pipe", "pipe", "pipe"] });
       return null;
     } catch (error) {
       if (error.status === 2) return String(error.stderr).trim();
     }
   }
-  console.warn("kill guard: no Python 3 ran it (python3, python, py -3); command allowed");
+  console.warn("kill guard: no Python 3 ran it (python3, python); command allowed");
   return null;
 }
 
