@@ -290,6 +290,8 @@ for ref in "references/phase-3.md" "references/phase-4.md" "references/phase-5.m
   dim_depth_max=$((dim_depth_max + 1))
   check depth "Router names $ref" $(grep -qF "$ref" "$FACTORY_SKILL" && [ -f ".agents/skills/create-skill-autoresearch/$ref" ] && echo 1 || echo 0)
 done
+dim_depth_max=$((dim_depth_max + 1))
+check depth "Router reads each phase file on entering that phase" $(grep -q "On entering a phase, read that" "$FACTORY_SKILL" && echo 1 || echo 0)
 # Small study materials are read inline: a researcher spawn costs more than the reading
 dim_depth_max=$((dim_depth_max + 1))
 check depth "Router reads small study materials inline" $(grep -q "under 40 KB" "$FACTORY_SKILL" && echo 1 || echo 0)
