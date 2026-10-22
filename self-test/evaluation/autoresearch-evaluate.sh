@@ -25,10 +25,10 @@ PHASE3_REF=".agents/skills/create-skill-autoresearch/references/phase-3.md"
 PHASE4_REF=".agents/skills/create-skill-autoresearch/references/phase-4.md"
 PHASE5_REF=".agents/skills/create-skill-autoresearch/references/phase-5.md"
 OPS_REF=".agents/skills/create-skill-autoresearch/references/operating-rules.md"
-# SKILL.md is the main session's router; phase detail lives in the phase files its workers read
+# SKILL.md is the main session's router; phase detail lives in the phase files it reads on entering each phase
 # (references/phase-3.md, phase-4.md, phase-5.md) plus the operating rules every session reads. Content
-# checks read the factory's instructions as a whole: the router, the operating rules and the phase files it
-# dispatches. Router-only checks still read $FACTORY_SKILL.
+# checks read the factory's instructions as a whole: the router, the operating rules and the phase files.
+# Router-only checks still read $FACTORY_SKILL.
 FACTORY_DOCS=("$FACTORY_SKILL" "$OPS_REF" "$PHASE3_REF" "$PHASE4_REF" "$PHASE5_REF")
 factory_has() { grep -q "$@" "${FACTORY_DOCS[@]}" && echo 1 || echo 0; }
 # The factory runs the upstream autoresearch skill and owns the loop conventions it needs
@@ -285,17 +285,14 @@ check depth "Factory SKILL.md has > 25 line margin (actual: $((500 - FACTORY_LIN
 dim_depth_max=$((dim_depth_max + 1))
 check depth "Factory SKILL.md is a router <= 260 lines (actual: $FACTORY_LINES)" $([ "$FACTORY_LINES" -le 260 ] && echo 1 || echo 0)
 
-# The orchestration contract: each phase worker reads only its file and returns a short summary
+# Progressive disclosure: the router names each phase file, read only on entering that phase
 for ref in "references/phase-3.md" "references/phase-4.md" "references/phase-5.md" "references/operating-rules.md"; do
   dim_depth_max=$((dim_depth_max + 1))
-  check depth "Router dispatches a worker with $ref" $(grep -qF "$ref" "$FACTORY_SKILL" && [ -f ".agents/skills/create-skill-autoresearch/$ref" ] && echo 1 || echo 0)
+  check depth "Router names $ref" $(grep -qF "$ref" "$FACTORY_SKILL" && [ -f ".agents/skills/create-skill-autoresearch/$ref" ] && echo 1 || echo 0)
 done
 # Small study materials are read inline: a researcher spawn costs more than the reading
 dim_depth_max=$((dim_depth_max + 1))
 check depth "Router reads small study materials inline" $(grep -q "under 40 KB" "$FACTORY_SKILL" && echo 1 || echo 0)
-
-dim_depth_max=$((dim_depth_max + 1))
-check depth "Worker summary is bounded (<= 15 lines) in the dispatch prompt" $(grep -qi "at most 15 lines" "$FACTORY_SKILL" && echo 1 || echo 0)
 
 # Is there guidance on minimum improvement for LLM-judge metrics?
 dim_depth_max=$((dim_depth_max + 1))
