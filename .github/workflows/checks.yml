@@ -1,6 +1,6 @@
 name: checks
 
-# Two deterministic jobs. No secrets, no API keys, no network beyond checkout.
+# Deterministic jobs. No secrets, no API keys, no network beyond checkout and the runner's Python.
 #
 # `self-test` is the one that matters to a fork, and it runs everywhere — including on pull requests
 # from forks, which is the point: the people most likely to break something here are the people who
@@ -29,6 +29,36 @@ jobs:
       # keeps the "runs immediately on a fresh clone" promise in the README honest.
       - name: Run the gate
         run: bash self-test/evaluation/gate.sh
+
+  # The factory's scripts and kill guard run on macOS and Linux (WSL included); the gate above covers
+  # Linux, this job macOS.
+  script-tests:
+    name: factory script tests (macos-latest)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Run the factory's script tests
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python -B -m unittest discover -s .agents/skills/create-skill-autoresearch/tests -v
+
+  # One manual-protocol gate end to end with a stub executor: record, the detached gate and its wait,
+  # check_gate.py, --panel and --finish. No claude and no network.
+  gate-smoke:
+    name: manual gate smoke (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run one manual gate with a stub run-case.sh
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: bash .github/scripts/gate-smoke.sh
 
   parity:
     name: factory parity with the published copy

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Regression gate for the harness itself. Runs the deterministic structural checks and fails
-# unless every check passes or fails only for a reason recorded below as advisory.
+# unless every check passes or fails only for a reason recorded below as advisory; then runs the
+# factory's offline script tests and the parity script's tests, which must all pass.
 #
 # Why a gate rather than a raw check count: new checks get added over time, so comparing
 # `checks_passed` against a hardcoded number hides a regression behind a rising total. This
@@ -29,7 +30,7 @@ ADVISORY_RE=''
 # reference over ~100 lines — so gutting a file can delete its own check and leave the suite green with
 # a smaller total. Comparing issues alone cannot catch that; a floor can. Raise this deliberately when
 # you add checks; lowering it is retiring coverage and needs the same scrutiny as ADVISORY_RE.
-MIN_CHECKS=86
+MIN_CHECKS=103
 
 # Explicit template: bare `mktemp -d` works on GNU and on current macOS, but older BSD mktemp wants one.
 # Costs nothing to be unambiguous in a script that advertises portability.
@@ -98,5 +99,29 @@ if [ "$((passed + advisory_count))" -ne "$total" ]; then
   echo "A check failed without reporting an issue line; the checker is unreliable until that is fixed." >&2
   exit 1
 fi
+
+# The factory's bundled scripts (gate runner, validator, process wrapper) and hooks ship with offline tests
+# in <skill>/tests/: a fake `claude` on PATH, fake run-case.sh adapters, temp workspaces. -B and the env var keep
+# __pycache__ out of the shipped skill directory.
+SCRIPT_TESTS=".agents/skills/create-skill-autoresearch/tests"
+echo ""
+echo "--- Script tests ---"
+if ! PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s "$SCRIPT_TESTS" >"$WORK/script-tests.txt" 2>&1; then
+  cat "$WORK/script-tests.txt" >&2
+  echo "" >&2
+  echo "GATE FAIL: the factory's script tests failed ($SCRIPT_TESTS)." >&2
+  exit 1
+fi
+tail -3 "$WORK/script-tests.txt"
+
+echo ""
+echo "--- Parity script tests ---"
+if ! bash "$HERE/test-check-parity.sh" >"$WORK/parity-tests.txt" 2>&1; then
+  cat "$WORK/parity-tests.txt" >&2
+  echo "" >&2
+  echo "GATE FAIL: the parity script tests failed (self-test/evaluation/test-check-parity.sh)." >&2
+  exit 1
+fi
+tail -1 "$WORK/parity-tests.txt"
 
 echo "GATE PASS"
