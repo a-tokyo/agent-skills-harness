@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One manual-protocol gate end to end on a tiny build workspace, with a stub run-case.sh standing in for
-# the executor, then a stub panel: gate.py record, the detached gate and its --wait, a re-gate that reuses the
-# cached without arm, check_gate.py, --panel,
+# the executor, then a stub panel: gate.py record, the detached gate and its --wait, the re-issued
+# --detach --wait reporting it, a --restart re-gate that reuses the cached without arm, check_gate.py, --panel,
 # three --panel-receipt calls, --consensus, --finish, and the finish guard before and after. No claude, no
 # network, no secrets. CI runs it on ubuntu-latest.
 #
@@ -45,7 +45,12 @@ for _ in $(seq 1 60); do
   [ "$rc" -ne 124 ] && break
 done
 [ "$rc" -eq 0 ] || { echo "gate exited $rc"; cat "$ws/work/pids/gate.log"; exit 1; }
-out="$(run gate.py --detach --wait --backend manual --model stub-model --executor single-call --in-sample)" \
+# Re-issued on an unchanged workspace, the one 5.0 command reports the settled gate; --restart re-runs it.
+again="$(run gate.py --detach --wait --backend manual --model stub-model --executor single-call --in-sample 2>&1)" \
+  || { echo "re-issued gate command failed"; echo "$again"; exit 1; }
+case "$again" in *"its result follows"*"GATE VALID"*) ;;
+  *) echo "the re-issued gate command did not report the settled gate"; echo "$again"; exit 1 ;; esac
+out="$(run gate.py --restart --wait --backend manual --model stub-model --executor single-call --in-sample)" \
   || { echo "re-gate failed"; cat "$ws/work/pids/gate.log"; exit 1; }
 case "$out" in *"reusing the cached without-skill arm for 3 of 3 cases"*) ;;
   *) echo "the re-gate did not reuse the cached without arm"; echo "$out"; exit 1 ;; esac
