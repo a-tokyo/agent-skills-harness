@@ -2,9 +2,9 @@
 """Run the Phase 5.0 eval gate as the owned job `gate` and write its canonical artifact.
 
     gate.py record [--skill NAME] [--backend plugin|manual [--force-manual '<host>: <reason>']]
-    gate.py --detach --wait --model <model> [options]  # start the job and block (540 s); exit 124: re-issue it
+    gate.py --detach --wait --model <model> [options]  # start the job and block (570 s); exit 124: re-issue it
     gate.py --detach --model <model> [options]    # check preconditions, start the job, return
-    gate.py --wait [--wait-timeout 540]           # block; exit 124 = still running: call --wait again
+    gate.py --wait [--wait-timeout 570]           # block; exit 124 = still running: call --wait again
     gate.py --restart --model <model> [options]   # stop only the recorded `gate` group, start it detached
     gate.py --stop                                # stop it and the eval runs it started
 
@@ -56,9 +56,9 @@ LOAD_CHECK_TIMEOUT = 120  # the zero-cost load check parses every case file and 
 POLL_SECONDS = 0.5  # how often the gate checks its runs and the stop request
 STOP_GRACE = 30  # --stop/--restart grace for the gate job: CHILD_GRACE for its eval runs, plus its record
 CHILD_GRACE = 10  # an eval run's time to exit after TERM before KILL
-WAIT_SECONDS = 540  # under the 600 s a Claude Code shell call may wait, so --wait returns first
+WAIT_SECONDS = 570  # under the 600 s a Claude Code shell call may wait (with timeout: 600000), so --wait returns first
 ATTEMPTS = 2  # one retry absorbs a transient failure; a second leaves the artifact partial
-DEFAULT_JOBS = 4  # concurrent eval runs, under a typical API account's rate limit
+DEFAULT_JOBS = 8  # concurrent eval runs: plugin eval's -j cap; every run shares the account's one rate limit
 EVAL_TIMEOUT, CASE_TIMEOUT = 5400, 1200  # a whole plugin eval, one manual run: past these a run is hung
 NOT_PROBED = "not-probed"
 SCORE_RE = re.compile(r"^SCORE=(\S+)\s*$", re.MULTILINE)

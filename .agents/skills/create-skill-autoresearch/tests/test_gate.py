@@ -37,12 +37,19 @@ class GatePluginTest(TempWorkspace):
         for flag in ("--ablation", "with-without", "--scaffold", "--trust-plugin", "--no-publish", "--threshold"):
             self.assertIn(flag, argv)
         self.assertEqual(argv[argv.index("--model") + 1], "claude-haiku-5-5")
+        self.assertEqual(argv[argv.index("-j") + 1], "8", "plugin eval's concurrency cap by default")
         record = self.evaluation("gate.json")
         self.assertEqual(record["mode"], "plugin")
         self.assertEqual(record["skill_sha256"], gate_common.skill_sha256(self.ws, "demo"))
         self.assertEqual(record["cases_sha256"], gate_common.cases_sha256(self.ws, self.CASES))
         self.assertEqual(self.record("gate")["cmd"][2], str(SCRIPTS / "gate.py"), "the gate ran as the owned job")
         self.assertEqual(self.run_script("check_gate.py").returncode, 0)
+
+    def test_wait_defaults_fit_one_claude_code_shell_call(self) -> None:
+        import gate  # noqa: E402  (on sys.path through helpers)
+
+        self.assertEqual((gate.WAIT_SECONDS, gate.DEFAULT_JOBS), (570, 8))
+        self.assertLess(gate.WAIT_SECONDS + 15, 600, "returns inside the 600 s a Claude Code Bash call may wait")
 
     def test_summary_separates_gold_cases_from_indicators(self) -> None:
         self.make_build(self.CASES)
