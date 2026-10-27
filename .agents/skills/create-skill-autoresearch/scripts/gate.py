@@ -453,7 +453,8 @@ def _elapsed(started: str) -> str:
 
 def wait_gate(ws: Path, timeout: float | None, proc: subprocess.Popen | None = None) -> int:
     """Block on the recorded `gate` job for up to `timeout` seconds (None: until it ends). Finished: print its
-    log, return its exit code. Still running: print one progress line, return 124. No job recorded: 3."""
+    log without its routine mode line (the whole log when it failed), return its exit code. Still running: print one short progress
+    line, return 124. No job recorded: 3. Each call's output stays in the caller's context, so it stays short."""
     sdir = run_owned.state_dir(ws)
     try:
         rec = run_owned.load(sdir, JOB)
@@ -464,12 +465,11 @@ def wait_gate(ws: Path, timeout: float | None, proc: subprocess.Popen | None = N
     rc = run_owned.wait(sdir, JOB, timeout=timeout, proc=proc)
     log = Path(rec.log).read_text(encoding="utf-8", errors="replace") if Path(rec.log).is_file() else ""
     if rc == run_owned.EXIT_TIMEOUT:
-        last = next((line.strip() for line in reversed(log.splitlines()) if line.strip()), "")
-        print(f"gate: still running after {_elapsed(rec.started)}{f' (last: {last})' if last else ''}; call --wait "
-              f"again (exit 124), or re-issue the same --detach --wait, not run_owned.py status: "
-              f"{WAIT_HINT.format(ws=ws)}", file=sys.stderr)
+        print(f"gate: still running after {_elapsed(rec.started)}; exit 124: re-issue the same --detach --wait "
+              f"(or call --wait again) with the shell timeout at 600000 ms", file=sys.stderr)
         return rc
-    sys.stdout.write(log)
+    routine = "gate: mode="  # the job's first line, which repeats what the caller asked for
+    sys.stdout.write(log if rc != 0 else "".join(l for l in log.splitlines(True) if not l.startswith(routine)))
     if rc == run_owned.EXIT_NO_STATUS:
         print(f"gate: the `{JOB}` job ended without recording an exit status; see {rec.log}", file=sys.stderr)
     return rc

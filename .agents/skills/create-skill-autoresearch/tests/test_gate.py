@@ -493,6 +493,7 @@ class GateLifecycleTest(TempWorkspace):
             self.assertEqual(len(out.stderr.strip().splitlines()), 1, out.stderr)
             self.assertIn("still running after", out.stderr)
             self.assertIn("call --wait again", out.stderr)
+            self.assertLess(len(out.stderr), 160, "a short line: every --wait's output stays in the caller's context")
             self.assertEqual(out.stdout, "")
         finally:
             self.stop()
@@ -505,7 +506,8 @@ class GateLifecycleTest(TempWorkspace):
         self.assertIn("GATE VALID", out.stdout)
         again = self.run_script("gate.py", "--wait", "--wait-timeout", "1")
         self.assertEqual(again.returncode, 0, "a finished gate returns its exit code at once")
-        self.assertIn("GATE VALID", again.stdout)
+        self.assertTrue(again.stdout.startswith("GATE VALID"), "a passed gate: no routine mode line")
+        self.assertNotIn("gate: mode=", again.stdout)
         self.write_adapter(SCORING_ADAPTER.replace('echo "EXECUTOR=$GATE_EXECUTOR"', ""))
         out = self.run_script("gate.py", "--detach", "--wait", "--model", "m", "--executor", "single-call")
         self.assertEqual(out.returncode, 1, out.stdout + out.stderr)
