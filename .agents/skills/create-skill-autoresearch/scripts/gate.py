@@ -19,7 +19,8 @@ every gate run records again first. It writes only under work/evaluation/ and wo
 Exit codes: 0 complete and valid (--detach, --restart, --stop: started or stopped); 1 the artifact is missing,
 partial or invalid, or an input changed while it ran; 2 usage error; 3 a precondition is missing, a `gate` job is
 already running, or (--wait) none is recorded; 124 (--wait) still running; 125 (--wait) the job ended without an
-exit status; 143 the gate was stopped.
+exit status; 143 the gate was stopped. Output is short by default; --verbose adds the job's pgid, log path and
+mode line, and the recorded case list.
 """
 
 from __future__ import annotations
@@ -451,10 +452,11 @@ def _elapsed(started: str) -> str:
     return f"{seconds // 3600}h{seconds // 60 % 60:02d}m" if seconds >= 3600 else f"{seconds // 60}m{seconds % 60:02d}s"
 
 
-def wait_gate(ws: Path, timeout: float | None, proc: subprocess.Popen | None = None) -> int:
+def wait_gate(ws: Path, timeout: float | None, proc: subprocess.Popen | None = None, verbose: bool = False) -> int:
     """Block on the recorded `gate` job for up to `timeout` seconds (None: until it ends). Finished: print its
-    log without its routine mode line (the whole log when it failed), return its exit code. Still running: print one short progress
-    line, return 124. No job recorded: 3. Each call's output stays in the caller's context, so it stays short."""
+    log without its routine mode line (the whole log when it failed or with `verbose`), return its exit code.
+    Still running: print one short progress line, return 124. No job recorded: 3. Each call's output stays in
+    the caller's context, so it stays short unless `verbose` asks for the detail."""
     sdir = run_owned.state_dir(ws)
     try:
         rec = run_owned.load(sdir, JOB)
@@ -465,11 +467,14 @@ def wait_gate(ws: Path, timeout: float | None, proc: subprocess.Popen | None = N
     rc = run_owned.wait(sdir, JOB, timeout=timeout, proc=proc)
     log = Path(rec.log).read_text(encoding="utf-8", errors="replace") if Path(rec.log).is_file() else ""
     if rc == run_owned.EXIT_TIMEOUT:
+        last = next((line.strip() for line in reversed(log.splitlines()) if line.strip()), "") if verbose else ""
         print(f"gate: still running after {_elapsed(rec.started)}; exit 124: re-issue the same --detach --wait "
-              f"(or call --wait again) with the shell timeout at 600000 ms", file=sys.stderr)
+              f"(or call --wait again) with the shell timeout at 600000 ms"
+              f"{f' (last: {last}; log {rec.log})' if last else ''}", file=sys.stderr)
         return rc
     routine = "gate: mode="  # the job's first line, which repeats what the caller asked for
-    sys.stdout.write(log if rc != 0 else "".join(l for l in log.splitlines(True) if not l.startswith(routine)))
+    keep = rc != 0 or verbose
+    sys.stdout.write(log if keep else "".join(l for l in log.splitlines(True) if not l.startswith(routine)))
     if rc == run_owned.EXIT_NO_STATUS:
         print(f"gate: the `{JOB}` job ended without recording an exit status; see {rec.log}", file=sys.stderr)
     return rc
@@ -499,7 +504,7 @@ def supervise(ws: Path, args: argparse.Namespace) -> int:
         if live:
             print(f"gate: a `{JOB}` job is already running; waiting on it (gate.py --restart starts over)",
                   file=sys.stderr)
-            return wait_gate(ws, args.wait_timeout)
+            return wait_gate(ws, args.wait_timeout, verbose=args.verbose)
         if _settled(ws, args):
             print(f"gate: the last gate finished on this workspace with these options; its result follows "
                   f"(gate.py --restart re-runs it)", file=sys.stderr)
@@ -509,7 +514,7 @@ def supervise(ws: Path, args: argparse.Namespace) -> int:
                 verdict = check_gate.validate(ws, args.skill)
                 print(verdict.line())
                 return 0 if verdict.valid else EXIT_INVALID
-            return wait_gate(ws, args.wait_timeout)
+            return wait_gate(ws, args.wait_timeout, verbose=args.verbose)
     if live and not args.restart:
         print(f"gate: a `{JOB}` job is already running (pgid {live['pgid']}, log {live['log']}).\n"
               f"  wait:      {WAIT_HINT.format(ws=ws)}\n"
@@ -527,22 +532,24 @@ def supervise(ws: Path, args: argparse.Namespace) -> int:
         print(f"gate: {run_owned.stop(sdir, JOB, grace=STOP_GRACE)}", file=sys.stderr)
     proc = run_owned.start(sdir, JOB, _job_argv(ws, args), cwd=ws, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
     rec = run_owned.load(sdir, JOB)
-    print(f"gate: started as owned job `{JOB}` (pgid {rec.pgid}); log {rec.log}", file=sys.stderr)
+    if args.verbose or not args.wait:  # with --wait, the result follows; a failed gate prints its whole log
+        print(f"gate: started as owned job `{JOB}`" + (f" (pgid {rec.pgid}); log {rec.log}" if args.verbose else ""),
+              file=sys.stderr)
     if args.wait:
-        return wait_gate(ws, args.wait_timeout, proc)
+        return wait_gate(ws, args.wait_timeout, proc, args.verbose)
     if args.detach or args.restart:
         print(f"gate: block until it exits (its exit code is the gate's; 124: call it again):\n  {WAIT_HINT.format(ws=ws)}",
               file=sys.stderr)
         return 0
     print(f"gate: waiting; if this call is cut off the gate keeps running: {WAIT_HINT.format(ws=ws)}", file=sys.stderr)
     try:
-        return wait_gate(ws, None, proc)
+        return wait_gate(ws, None, proc, args.verbose)
     except KeyboardInterrupt:
         print(f"\ngate: still running in the background: {WAIT_HINT.format(ws=ws)}", file=sys.stderr)
         return 130
 
 
-def record(ws: Path, skill: str | None, backend: str | None, force_manual: str | None) -> int:
+def record(ws: Path, skill: str | None, backend: str | None, force_manual: str | None, verbose: bool = False) -> int:
     try:
         cases, mode, available, _ = record_cases(ws, resolve_skill(ws, skill), backend, force_manual)
     except GateError as exc:
@@ -551,7 +558,7 @@ def record(ws: Path, skill: str | None, backend: str | None, force_manual: str |
         return EXIT_PRECONDITION
     log_attempt(ws, "record")
     print(f"gate: recorded {len(cases)} gate cases for mode {mode} (plugin eval probe exit {available}) in "
-          f"{DATA_SPLIT}: {', '.join(cases)}")
+          f"{DATA_SPLIT}" + (f": {', '.join(cases)}" if verbose else ""))
     return 0
 
 
@@ -578,6 +585,7 @@ def main(argv: list[str] | None = None) -> int:
     add("--stop", action="store_true", help="stop the recorded `gate` job and its eval runs")
     add("--wait", action="store_true", help="block on the `gate` job (after starting it with --detach/--restart)")
     add("--wait-timeout", type=float, default=WAIT_SECONDS, help=f"--wait: seconds before exit 124 (default {WAIT_SECONDS})")
+    add("--verbose", action="store_true", help="also print the job's pgid, log path, mode line and the recorded cases")
     args = parser.parse_args(argv)
     if args.force_manual is not None:
         host, _, reason = " ".join(args.force_manual.split()).partition(":")
@@ -591,7 +599,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "record":
         if args.stop or args.detach or args.restart or args.wait:
             parser.error("record takes no --stop, --detach, --restart or --wait")
-        return record(args.workspace.resolve(), args.skill, args.backend, args.force_manual)
+        return record(args.workspace.resolve(), args.skill, args.backend, args.force_manual, args.verbose)
     if args.stop and (args.detach or args.restart or args.wait):
         parser.error("--stop takes no --detach, --restart or --wait")
     if args.wait_timeout <= 0:
@@ -610,7 +618,7 @@ def main(argv: list[str] | None = None) -> int:
                   f"gate: no running `{JOB}` job", file=sys.stderr)
             return 0
         if bare_wait:
-            return wait_gate(ws, args.wait_timeout)
+            return wait_gate(ws, args.wait_timeout, verbose=args.verbose)
         return run_gate(ws, args) if _inside_gate_job(ws) else supervise(ws, args)
     except run_owned.OwnedError as exc:
         print(f"gate: {exc}", file=sys.stderr)
