@@ -37,10 +37,12 @@ had a rule for that conflict. With the rule, the next candidate run reached 0.96
 (`k-*`), which also carries the tribunal fixes, the cycle-2 scripts and the owned, hash-bound gate,
 has task-2 with Haiku at 0.969 (0.953–0.980), tying v0.2.1. The cycle-3 run (`p-*`, harness `0c94f94`)
 had it at 0.958 (0.908–0.989), and the release-candidate run (`r-*`, harness `8e505b0`) at 0.969
-(0.926–0.989). The `s-*` run (harness `82ec859`) had it at 0.932 (0.858–0.980). The release run (`u-*`,
-harness `f684797`, the shipped factory, loaded as a plugin so its kill guard and finish guard were active)
-has it at 0.917 (0.872–0.968), below v0.2.1 but inside the 0.117 pooled spread. Its builds mostly lose the
-approval tier (14 of 25 holdout scores miss it), and two lose one holdout almost entirely.
+(0.926–0.989). The `s-*` run (harness `82ec859`) had it at 0.932 (0.858–0.980). The `u-*` run (harness
+`f684797`, loaded as a plugin so its kill guard and finish guard were active) had it at 0.917
+(0.872–0.968), below v0.2.1 but inside the 0.117 pooled spread. Its builds mostly lose the
+approval tier (14 of 25 holdout scores miss it), and two lose one holdout almost entirely. At n=10 on the shipped
+factory (`n10-*`, harness `f3bf3b1`) it is 0.925 (0.867–0.978) against v0.2.1's 0.959, still inside the
+pooled spread.
 
 ## What the loop taught
 
@@ -81,29 +83,31 @@ approval tier (14 of 25 holdout scores miss it), and two lose one holdout almost
 - **Two builds per measurement is too few.** One bad build moved experiment 3's median past the noise
   threshold on its own; experiment 4 used four.
 
-The before/after comparison against v0.2.1 and bare (n=5 per cell, both tasks, Sonnet 5.5 and Haiku
-5.5; v0.3.0 is the `u-*` run on the shipped factory, harness `f684797`, whose installed copy in every
-build matches the published skill byte for byte, so the published result matches the shipped factory),
-with its fidelity counts, is published in
-[Results — v0.3.0 release](https://github.com/a-tokyo/agent-skills/tree/main/benchmarks/create-skill-autoresearch#results--v030-release-u--october-2026).
-Median overall v0.3.0 / v0.2.1 / bare: task-2 Sonnet 1.000 / 0.975 / 0.975, task-2 Haiku 0.917 / 0.969 /
-0.969, task Sonnet 0.946 / 0.946 / 0.971, task Haiku 0.871 / 0.871 / 0.896. Criterion 4 passes in every
-cell. Its gain condition is met on task-2 Sonnet (+0.025 over v0.2.1 and bare, inside the 0.067 pooled
-spread, so not a measured improvement). Both task cells tie v0.2.1 and sit 0.025 below bare; task-2
-Haiku is 0.052 below both, inside the 0.117 and 0.108 spreads. Across the five v0.3.0 runs (`k-*`, `p-*`,
-`r-*`, `s-*`, `u-*`) a cell's median spans 0.025–0.052, and the `s-*` to `u-*` moves (+0.020, −0.015,
-−0.025, −0.050) are each smaller than the spread inside the `u-*` cell, so release-to-release movement is
-run-to-run noise. Fidelity: 20 of 20 gates valid, 20 of 20 verdicts, three role receipts and a consensus
-in every build, no verdict above its consensus, no kill command, no stale gate, no below-target build
-labelled shipped. Median wall time is 1.6–5.0× v0.2.1's (15.1 against 9.3 minutes on task Sonnet, 27.9
-against 17.6 on task Haiku, 40.0 against 8.2 on task-2 Sonnet, 61.4 against 12.2 on task-2 Haiku) and
-input tokens 1.9–6.2× (task-2 Haiku 48.9M against 7.9M; reported, not gated). The earlier `s-*` (harness
-`82ec859`), `r-*` (harness `8e505b0`), `p-*` (harness `0c94f94`) and `k-*` (harness `a3fa032`) runs stay
-published below it as superseded.
+## Published result: n=10 against v0.2.1 (`n10-*`)
 
-Agent-agnostic check (Amendment 3): two task builds under `cursor-agent` (Sonnet 5.5, harness `f684797`,
-isolated HOME, no `claude` on the build PATH) both scored 0.971, above the Claude Code Sonnet median.
-Both gates validated in manual mode, with `composer-2.5` as the executor each build chose. One ended
-SHIP WITH CAVEATS and one `UNSHIPPED` on an ESCALATE consensus, after 59 and 39 minutes. `cursor-agent -p`
-runs no `stop` hook, so the finish guard was not active there. Two builds show that the pipeline runs and
-labels honestly without Claude Code; they are not a quality result.
+The release benchmark ran ten builds per arm and cell (both tasks, Sonnet 5.5 and Haiku 5.5) on harness
+`f3bf3b1`, whose installed copy matched in all 44 v0.3.0 run directories, against v0.2.1. Full tables,
+per-build rows and disclosures are in
+[Results — v0.3.0 at n=10](https://github.com/a-tokyo/agent-skills/tree/main/benchmarks/create-skill-autoresearch#results--v030-at-n10-n10--october-2026).
+
+| Cell | n v0.3.0 / v0.2.1 | Cost median, M units (v0.3.0 / v0.2.1) | Ratio | Criterion 17 bar | Overall median (v0.3.0 / v0.2.1 / bare) |
+|------|-------------------|----------------------------------------|-------|------------------|------------------------------------------|
+| commit messages, Haiku | 9 / 9 | 10.04 / 3.43 | 2.92× | 14.49 · PASS | 0.871 / 0.921 / 0.896 |
+| commit messages, Sonnet | 10 / 9 | 2.65 / 2.57 | 1.03× | 5.64 · PASS | 0.971 / 0.946 / 0.971 |
+| purchase orders, Haiku | 10 / 10 | 10.10 / 6.17 | 1.64× | 28.70 · PASS | 0.925 / 0.959 / 0.969 |
+| purchase orders, Sonnet | 10 / 10 | 4.98 / 3.67 | 1.36× | 7.82 · PASS | 0.976 / 0.975 / 0.975 |
+
+- **Cost (criterion 17)** passes in all four cells against v0.2.1's median plus its own spread, but v0.3.0
+  costs more in every cell; commit-message Haiku is panel-heavy (median 4.85M in subagents).
+- **Quality (criterion 4)** passes in all four cells. Both Haiku cells are below v0.2.1 and bare, inside
+  the pooled spread; there is no measured gain.
+- **Fidelity:** 38 of 39 v0.3.0 gates valid, 39 of 39 builds finished, 0 kill commands executed (1
+  blocked), 0 shipped verdicts on an invalid gate, 0 verdicts above the consensus, 0 mislabels; 20 SHIP
+  WITH CAVEATS and 19 `UNSHIPPED` (49%). v0.2.1, which has no gate or finish check, wrote 25 shipped
+  verdicts with no validated gate, ran 1 pattern kill, mislabelled 1 build and left 9 without a verdict.
+- **Disclosed:** four clean builds went unscored after scoring-executor faults (hence the n=9 cells), one
+  v0.3.0 slot is scored twice, 47 environment failures (network loss with the lid closed) were rerun and
+  never scored, and wall time includes laptop sleep.
+
+The earlier n=5 runs (`k-*` to `u-*`, harness `a3fa032` to `f684797`) stay published below it as superseded
+history, along with two Cursor builds that showed the pipeline runs without Claude Code.
