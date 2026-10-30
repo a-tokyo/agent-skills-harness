@@ -99,3 +99,14 @@ Build v1 manually with production-grade rigor. Use v1 to improve itself for v2. 
 - Phase 2: Multi-agent verification -- Panel with consensus, Devil's Advocate
 - Phase 3: Advanced features -- plateau detection, multi-judge, 70/20/10 split, handoff/resume
 - Phase 4: Self-improvement -- run factory on itself, refine
+
+### D19 -- Ship Decision: Metric-first when outputs are checkable (2026-10-30, user decision)
+Evidence (n10-* benchmark): Haiku builds that ran 3 panel rounds scored 0.836-0.871 on the deterministic answer key
+against 0.861-0.971 for 1-round builds, and the panel's label did not track the key (UNSHIPPED skills at 0.969-0.978,
+SHIP WITH CAVEATS at 0.836). Panel-driven edits cost money and lowered quality.
+- `rubric.yaml` `metric: answer-key`: the 5.0 gate (every gold delta > 0; caveats down to -caveat_margin, below it
+  UNSHIPPED) and the Phase 4 metric on the shipped commit (the lower of it and validation) against target_score decide;
+  the panel runs one round as a logged review and vetoes only by a cited `veto` (hard constraint, safety, the DA's
+  ESCALATE with a reproduction). `check_gate.py` prints and enforces a `SHIP RULE:` line.
+- `metric: llm-judge` or absent: the panel's verdict as before, `max_panel_rounds` 3. Here a gold delta <= 0 still caps
+  at SHIP WITH CAVEATS however negative; the asymmetry is deliberate (the brief's "gate within the caveat margin").
