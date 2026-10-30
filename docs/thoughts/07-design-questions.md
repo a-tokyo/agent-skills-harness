@@ -108,5 +108,8 @@ SHIP WITH CAVEATS at 0.836). Panel-driven edits cost money and lowered quality.
   UNSHIPPED) and the Phase 4 metric on the shipped commit (the lower of it and validation) against target_score decide;
   the panel runs one round as a logged review and vetoes only by a cited `veto` (hard constraint, safety, the DA's
   ESCALATE with a reproduction). `check_gate.py` prints and enforces a `SHIP RULE:` line.
-- `metric: llm-judge` or absent: the panel's verdict as before, `max_panel_rounds` 3. Here a gold delta <= 0 still caps
-  at SHIP WITH CAVEATS however negative; the asymmetry is deliberate (the brief's "gate within the caveat margin").
+- `metric: llm-judge` or absent: the panel's verdict as before, `max_panel_rounds` 3. The gold deltas cap it by the
+  same rule as metric-first (verdict-rules.json `gold_gate`; `check_gate.py --consensus` prints a `GOLD GATE:` line):
+  a delta <= 0 caps at SHIP WITH CAVEATS, one below -caveat_margin allows only UNSHIPPED. Until 2026-10-30 this path
+  capped at SHIP WITH CAVEATS however negative; the user chose the stricter rule for both (2026-10-30), since a skill
+  that makes a gold case clearly worse should not ship on a panel's scores.
