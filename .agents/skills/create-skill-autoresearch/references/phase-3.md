@@ -216,11 +216,11 @@ When using multiple LLM judges for higher confidence scoring:
 ```yaml
 # work/evaluation/judges.yaml
 judges:
-  - model: "<model-1>"       # e.g., a strong reasoning model
+  - model: "claude-opus-5-5"     # a strong judge; the newest ids today: claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5
     weight: 1.0
-  - model: "<model-2>"       # e.g., a different model family
+  - model: "<model-2>"           # a different model family from the builder
     weight: 1.0
-  - model: "<model-3>"       # optional third judge
+  - model: "claude-haiku-5-5"    # optional third judge
     weight: 0.5              # lower weight if less trusted
 aggregation: "mean"           # "mean" or "median"
 ```

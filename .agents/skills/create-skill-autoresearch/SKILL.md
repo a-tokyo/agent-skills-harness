@@ -194,7 +194,7 @@ Each panel member scores every rubric dimension independently: score (rubric sca
 scores to the skill and rubric hashes: a skill change afterwards voids every receipt.
 
 Use a **different model family** for the panel when possible — e.g. another host's headless CLI (hosts.md) for
-the Devil's Advocate, never a weaker model than the builder.
+the Devil's Advocate, never a weaker model than the builder (on Claude, `claude-opus-5-5`).
 
 **One agent per role — this is the mechanism, not a formality.** One agent simulating the panel scores at
 its own solo floor (0.62 measured, vs 0.75 for separate agents): shared context, shared blind spots. The
