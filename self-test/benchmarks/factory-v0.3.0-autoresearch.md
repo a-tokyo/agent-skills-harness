@@ -97,8 +97,9 @@ per-build rows and disclosures are in
 | purchase orders, Haiku | 10 / 10 | 10.10 / 6.17 | 1.64× | 28.70 · PASS | 0.925 / 0.959 / 0.969 |
 | purchase orders, Sonnet | 10 / 10 | 4.98 / 3.67 | 1.36× | 7.82 · PASS | 0.976 / 0.975 / 0.975 |
 
-- **Cost (criterion 17)** passes in all four cells against v0.2.1's median plus its own spread, but v0.3.0
-  costs more in every cell; commit-message Haiku is panel-heavy (median 4.85M in subagents).
+- **Cost (criterion 17): v0.3.0 is not cheaper than v0.2.1 in any cell** (median 1.03×–2.92× per build). It
+  passes on Amendment 4a's bar (v0.2.1's median plus v0.2.1's own spread), not on literal parity;
+  commit-message Haiku is panel-heavy (median 4.85M in subagents).
 - **Quality (criterion 4)** passes in all four cells. Both Haiku cells are below v0.2.1 and bare, inside
   the pooled spread; there is no measured gain.
 - **Fidelity:** 38 of 39 v0.3.0 gates valid, 39 of 39 builds finished, 0 kill commands executed (1
@@ -108,6 +109,15 @@ per-build rows and disclosures are in
 - **Disclosed:** four clean builds went unscored after scoring-executor faults (hence the n=9 cells), one
   v0.3.0 slot is scored twice, 47 environment failures (network loss with the lid closed) were rerun and
   never scored, and wall time includes laptop sleep.
+- **Builder model:** Sonnet is the recommended builder. Haiku builds end `UNSHIPPED` in 6 of 9 and 8 of 10
+  runs (Sonnet: 2 of 10, 3 of 10).
+- **Not benchmarked:** the six final-panel fixes after `f3bf3b1` (`6b040c5` to `db3a28e`) are verified by the
+  offline tests and live smokes only.
+- **`tests/` ships** inside the skill folder to every installer (Claude Code reads only what SKILL.md
+  references).
+- **Guard coverage:** only Claude Code has the full guard set (kill, loop, subagent, finish) verified live;
+  Cursor's kill guard is verified live, its subagent and finish guards offline; Codex and OpenCode are
+  tested offline only ([hosts.md](../../.agents/skills/create-skill-autoresearch/references/hosts.md)).
 
 The earlier n=5 runs (`k-*` to `u-*`, harness `a3fa032` to `f684797`) stay published below it as superseded
 history, along with two Cursor builds that showed the pipeline runs without Claude Code.
