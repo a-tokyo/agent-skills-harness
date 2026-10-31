@@ -14,14 +14,15 @@ skill-creation lifecycle as a 5-phase pipeline:
 
 1. **Interview** — discover purpose, gold standards, and scope
 2. **Research** — study domain materials with parallel subagents
-3. **Draft** — design-first, following the official skill-authoring rules
+3. **Draft** — design-first, authored with Anthropic's `skill-creator`, plus a `claude plugin eval` suite
 4. **Autoresearch** — iterate autonomously against LLM-as-judge (or a real-world metric) until the target score is hit
-5. **Verify** — independent panel with a devil's advocate, reaching consensus before shipping
+5. **Verify** — a with/without `claude plugin eval` gate, then an independent panel with a devil's advocate, reaching consensus before shipping
 
-It **extends** the official single-pass skill creators (Anthropic's
-[Skill best-practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)
-/ `skill-creator`, and Cursor's `create-skill`) rather than replacing them — adding the research
-dossier, benchmarking, improvement loop, and verification a one-shot generator can't.
+It **composes** the official single-pass skill creator rather than copying it: Anthropic's
+[`skill-creator`](https://github.com/anthropics/skills/tree/main/skills/skill-creator) writes the
+draft, and the factory adds the research dossier, benchmarking, improvement loop, and verification a
+one-shot generator can't. Companions stay current upstream; a standalone install falls back to the
+factory's built-in checklist.
 
 ## Prerequisites
 
@@ -120,7 +121,7 @@ Working inside a larger monorepo or AI workspace? A clean arrangement is to keep
 **Runs immediately on a fresh clone** — no credentials, no network, just `bash` and `python3`:
 
 ```bash
-npm test        # the gate: structural checks + a written allowlist of advisory failures
+npm test        # the gate: structural checks + a written allowlist of advisory failures + script tests
 ```
 
 That wraps `self-test/evaluation/autoresearch-evaluate.sh`, which you can also run directly for the
@@ -178,7 +179,7 @@ independent subagent panel with evidence-based consensus (≈ 0.84 vs a 0.80 tar
   create-skill-autoresearch/        #   the factory (the original deliverable)
   autoresearch/ production-grade/   #   companion skills (vendored — see Provenance)
   premortem/ handoff/ llm-council/  #   ...
-  writing-great-skills/             #   craft layer behind the factory's skill-craft-principles
+  skill-creator/ writing-for-agents/ #   authoring + craft layers the factory delegates to
   tribunal/                         #   Phase 5 verification, when delegated
   documentation-writer/ design-taste-frontend/
 
@@ -214,9 +215,10 @@ skills-lock.json                    # provenance + version pins for vendored ski
 
 ## Companion skills & provenance
 
-The factory orchestrates sibling skills at runtime: **autoresearch** (Phase 4), **premortem**
-(Phase 5), and **handoff** (cross-session); the panel design draws on **llm-council**, and the craft
-layer on **writing-great-skills**. These and a couple of utilities are **vendored** into
+The factory orchestrates sibling skills at runtime: **skill-creator** (Phase 3 authoring and the
+Phase 4.6 description pass), **writing-for-agents** (craft passes), **autoresearch** (Phase 4),
+**premortem** (Phase 5), and **handoff** (cross-session); `claude plugin eval` runs the Phase 5.0
+gate, and the panel design draws on **llm-council**. These and a couple of utilities are **vendored** into
 `.agents/skills/` and tracked in `skills-lock.json` with their upstream source and a content hash.
 
 They are committed on purpose, so a fresh clone works offline and a given harness commit always
@@ -236,7 +238,8 @@ With gratitude to the upstream authors:
 | Skill | Source |
 |-------|--------|
 | `autoresearch`, `documentation-writer` | [github/awesome-copilot](https://github.com/github/awesome-copilot) |
-| `handoff`, `writing-great-skills` | [mattpocock/skills](https://github.com/mattpocock/skills) |
+| `handoff`, `writing-for-agents` | [mattpocock/skills](https://github.com/mattpocock/skills) |
+| `skill-creator` | [anthropics/skills](https://github.com/anthropics/skills) |
 | `llm-council` | [am-will/codex-skills](https://github.com/am-will/codex-skills) |
 | `premortem` | [parcadei/continuous-claude-v3](https://github.com/parcadei/continuous-claude-v3) |
 | `production-grade`, `tribunal` | [a-tokyo/agent-skills](https://github.com/a-tokyo/agent-skills) |

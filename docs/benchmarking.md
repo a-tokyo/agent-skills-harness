@@ -17,6 +17,16 @@ rather than by reading it, and unit-test the scorer itself so a green run means 
 medians over n=5 per cell, per model, and **always disclose the actual n**. Publish the cells where the
 skill does not separate.
 
+**With Claude Code, prefer `claude plugin eval --ablation with-without`.** It runs every case in fresh
+sessions with and without the skill and reports WITH, W/OUT and Δ — the same-model uplift above, as a
+supported CLI with free deterministic graders (`regex` on output files, `tool_used`) and an HTML report.
+The factory builds this suite in Phase 3.6 and runs it as the Phase 5.0 gate through its bundled
+`scripts/gate.py`, which passes `--allow-tools` for the gated tools a skill needs (Bash, Write),
+`--scaffold` for fixtures and a pinned `--model`; `scripts/check_gate.py` then refuses an incomplete
+artifact, one with no gold case (a case graded by anything beyond `tool_used` on `Skill`), or one
+from before the skill, its cases, `run-case.sh`, a scorer or fixture, or the artifact itself last changed. Without Claude Code, `gate.py` runs the same cases by the manual protocol; outside the factory,
+run the arms by hand as below.
+
 ## Two caveats that decide whether a number means anything
 
 **1. Absolute quality is not uplift.** The autoresearch loop optimizes `overall_score` — absolute

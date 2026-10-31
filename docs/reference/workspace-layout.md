@@ -28,17 +28,33 @@ builds/<skill-name>/
       evaluate.sh                 # METRIC-emitting evaluation script
       evaluate-checks.sh          # Optional correctness gate
       judges.yaml                 # Optional multi-judge configuration
-      data-split.yaml             # Train/validation/test assignment
+      data-split.yaml             # Train/validation/test assignment (+ plugin_eval case list, written by
+                                  #   scripts/gate.py record from disk)
+      synthetic/                  # < 3 gold standards only: >= 3 synthetic held-out cases (phase-4.md 4.2)
+      run-case.sh                 # Phase 3.6 manual-protocol adapter: one run of <case> <with|without>,
+                                  #   prints SCORE=<0..1>
+      plugin/                     # Phase 3.6 wrapper plugin: .claude-plugin/plugin.json,
+                                  #   skills/<name>/ (copy of output, refreshed by gate.py), evals/<case>/
+      gate.json                   # Phase 5.0 gate record: mode (plugin | manual), probe exit code, cases,
+                                  #   sha256 of output/<name>/ and of the case set, started/finished
+      gate-attempts.jsonl         # one line per gate.py record / gate run and the error that stopped it;
+                                  #   check_gate.py --finish needs one before an UNSHIPPED verdict counts
+      plugin-eval.json            # Phase 5.0 with/without result (WITH, W/OUT, delta per case)
+      uplift.json                 # Phase 5.0 manual with/without result, when plugin eval is unavailable
+                                  #   or the skill is user-invoked (replaces plugin-eval.json)
+
+    pids/                         # run_owned.py job records (<name>.json: pid, pgid, supervisor, cmd), logs,
+                                  #   exit codes, <name>.lock (held by the live supervisor), <name>.stop
+                                  #   (stop request); gate.json/gate.log for the `gate` job; .gitignore (*)
 
     experiments/
       DESIGN.md                   # Structural decisions locked before drafting
       craft-decisions.md          # Append-only iteration ledger (DNN format)
       improvement-notes.md        # Lesson -> improvement log across rounds (see below)
       OPEN-QUESTIONS.md           # Unresolved questions awaiting a human decision (see below)
-      autoresearch.md             # Session contract (goal, config, budget)
-      autoresearch.jsonl          # Machine log with ASI fields
-      results.tsv                 # Human-readable experiment journal
-      autoresearch.ideas.md       # Deferred hypothesis backlog
+      autoresearch.jsonl          # Factory-written machine log, one line per experiment
+      results.tsv                 # Human-readable experiment journal (upstream autoresearch)
+      autoresearch.ideas.md       # Factory-written hypothesis backlog
       run.log                     # Last evaluation command output
 
     handoffs/                     # Context preservation
@@ -117,16 +133,29 @@ first: `manifest.yaml`, `evaluation/rubric.yaml` (which holds the exit criteria)
 `evaluation/judges.yaml` and `evaluation/data-split.yaml`. Everything else is derived from those and
 gets rewritten, so edit the inputs rather than the outputs. See [tuning.md](tuning.md).
 
-**No credentials in any of these files.** Anything under `work/` may be committed when you run the
-factory inside your own project repo (see [Git Tracking](#git-tracking)), so a key written into
-`judges.yaml` becomes a key in your git history. Credentials belong in the environment.
+**No credentials in any of these files.** `work/` is committed in the workspace's own git repository
+(see [Git Tracking](#git-tracking)), so a key written into `judges.yaml` becomes a key in git history. Credentials belong in the environment.
 
 Subdirectories:
 
 - `manifest.yaml` — the factory's index of the gold standards found in `input/`, tagged train/validation/test.
 - `research/` — Phase 2 notes from parallel subagent exploration. `00-synthesis.md` is the cross-cutting synthesis (read first); numbered notes correspond to study-material clusters.
 - `evaluation/` — the scoring infrastructure: `rubric.yaml` (dimensions, weights, criteria, and the exit criteria `target_score`/`max_iterations`/`plateau_window`), `evaluate.sh` (the script autoresearch calls), the optional `evaluate-checks.sh` correctness gate, `judges.yaml` (judge models and weights — names only, never a credential), and `data-split.yaml` (which gold standards are training vs held out).
-- `experiments/` — all experimentation artifacts: `DESIGN.md` (structural decisions locked before the first draft), `craft-decisions.md` (per-iteration ledger), the autoresearch session files, and `run.log`.
+  Phase 3.6 adds `run-case.sh`, and Phase 5.0 writes the gate artifacts through the factory's bundled
+  scripts — never by hand: `scripts/gate.py` (run as the owned job `gate`, started with `--detach` and
+  awaited with `gate.py --wait`) picks the mode, runs the suite and writes `gate.json` plus
+  `plugin-eval.json` or `uplift.json`; `scripts/check_gate.py` exits non-zero unless `gate.json` records a
+  finished run whose hashes (skill, cases, `run-case.sh`, the scorer and fixture files under `input/` and
+  `evaluation/`, the artifact) still match, at least one case is a gold case with a numeric delta, and that
+  artifact is complete (`"partial": false`) and covers exactly the `plugin_eval` cases. Phase 5.2 does not
+  start, and 5.4 writes no SHIP verdict, until it passes.
+- `pids/` — one record per background job started with the factory's `scripts/run_owned.py` (pid,
+  process group, supervisor pid, the leader's start time when `ps` can read it, command, log, exit
+  code). Each job runs under a supervisor that holds `<name>.lock` while it lives; `run_owned.py stop
+  <name>` writes `<name>.stop` and the supervisor stops only its own child group, so a build never stops
+  another build's processes and nothing needs `ps`. Transient; `run_owned.py` writes a `.gitignore` of
+  `*` here.
+- `experiments/` — all experimentation artifacts: `DESIGN.md` (structural decisions locked before the first draft), `craft-decisions.md` (per-iteration ledger), `premortem.md` (the 5.1 risk list the panel tests), the autoresearch session files, and `run.log`.
 - `handoffs/` — cross-session continuity (`state.yaml` for automatic resume, `HANDOFF-*.md` for rich human-readable context).
 
 ### output/ — what you get
@@ -153,25 +182,26 @@ Autoresearch runs from the **build workspace root** (`builds/<skill-name>/`). Th
 the workspace root during an active session and are archived to `work/experiments/` when the
 session ends or on handoff.
 
-| Autoresearch creates at root | Archived to |
-|------------------------------|-------------|
-| `autoresearch.md` | `work/experiments/autoresearch.md` |
-| `autoresearch.jsonl` | `work/experiments/autoresearch.jsonl` |
-| `results.tsv` | `work/experiments/results.tsv` |
-| `run.log` | `work/experiments/run.log` |
-| `autoresearch.ideas.md` | `work/experiments/autoresearch.ideas.md` |
+| Session file at root | Written by | Archived to |
+|----------------------|------------|-------------|
+| `results.tsv` | upstream autoresearch | `work/experiments/results.tsv` |
+| `run.log` | upstream autoresearch | `work/experiments/run.log` |
+| `autoresearch.jsonl` | the factory | `work/experiments/autoresearch.jsonl` |
+| `autoresearch.ideas.md` | the factory | `work/experiments/autoresearch.ideas.md` |
 
-The factory creates `autoresearch.checks.sh` at the workspace root as a wrapper that calls
-`work/evaluation/evaluate-checks.sh`.
+The upstream autoresearch skill keeps only `results.tsv` and `run.log`; the factory writes
+`autoresearch.jsonl` and `autoresearch.ideas.md` itself and runs `work/evaluation/evaluate-checks.sh`
+(when present) before every measurement — see the "Loop Conventions the Factory Owns" section of the
+factory's `references/phase-4.md`.
 
 `BENCHMARK.md` (final pass/fail scores for the shipped skill) is generated at the end of Phase 5
 (Verify) and placed at `builds/<skill-name>/BENCHMARK.md`. It is a summary, not a process artifact.
 
 ## Git Tracking
 
-`builds/` is gitignored in this harness, so none of the below is tracked here — these are the
-recommendations for when you run the factory **inside your own project repo** and want to
-preserve the build.
+Each build workspace is its own git repository, because the Phase 4 loop resets it (factory
+SKILL.md 1.6). A workspace inside a parent project — `builds/` here, which this harness gitignores —
+is gitignored by the parent, and its files are tracked in the workspace's own repository:
 
 | File | Tracked? | Why |
 |------|----------|-----|
@@ -181,9 +211,11 @@ preserve the build.
 | `work/evaluation/rubric.yaml` | Yes | Scoring definition |
 | `work/evaluation/evaluate.sh` | Yes | Evaluation logic |
 | `work/evaluation/judges.yaml` | Yes (if present) | Multi-judge config — **model names and weights only; a credential here would be committed** |
+| `work/evaluation/data-split.yaml` | Yes | Split and gate cases; leave-one-out rotation commits it on its own so experiment reverts cannot roll it back |
+| `work/evaluation/run-case.sh`, `gate.json`, `plugin-eval.json` / `uplift.json` | Yes | Gate adapter, record and evidence |
+| `work/pids/*` | No | Transient process records |
 | `work/experiments/DESIGN.md` | Yes | Design contract |
 | `work/experiments/craft-decisions.md` | Yes | Iteration history |
-| `work/experiments/autoresearch.md` | No | Session-specific |
 | `work/experiments/autoresearch.jsonl` | No | Session-specific |
 | `work/experiments/results.tsv` | No | Session-specific |
 | `work/experiments/run.log` | No | Transient output |
