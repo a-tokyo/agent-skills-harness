@@ -30,6 +30,7 @@ builds/<skill-name>/
       judges.yaml                 # Optional multi-judge configuration
       data-split.yaml             # Train/validation/test assignment (+ plugin_eval case list, written by
                                   #   scripts/gate.py record from disk)
+      synthetic/                  # < 3 gold standards only: >= 3 synthetic held-out cases (phase-4.md 4.2)
       run-case.sh                 # Phase 3.6 manual-protocol adapter: one run of <case> <with|without>,
                                   #   prints SCORE=<0..1>
       plugin/                     # Phase 3.6 wrapper plugin: .claude-plugin/plugin.json,

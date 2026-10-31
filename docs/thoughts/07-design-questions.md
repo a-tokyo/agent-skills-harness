@@ -113,3 +113,20 @@ SHIP WITH CAVEATS at 0.836). Panel-driven edits cost money and lowered quality.
   a delta <= 0 caps at SHIP WITH CAVEATS, one below -caveat_margin allows only UNSHIPPED. Until 2026-10-30 this path
   capped at SHIP WITH CAVEATS however negative; the user chose the stricter rule for both (2026-10-30), since a skill
   that makes a gold case clearly worse should not ship on a panel's scores.
+
+### D20 -- Stopping and shipping on a held-out score (2026-10-31, user decision)
+Evidence (c18-* benchmark, harness d2f7456): v0.3 Haiku task-2 builds read 0.95-1.0 on their own Phase 4 metric, often
+at experiment 0, so the fast path, the 1.0 ceiling and the plateau ended Phase 4 early, while the hidden holdout scored
+those skills 0.85-0.91 (median 0.877 against v0.2.1's 0.959, which never stopped early); commit messages on Haiku the
+same (0.871 against 0.921). The stops trusted a training metric that cannot see overfitting to a handful of gold
+standards, and with 3-9 gold standards there was no validation split for "the lower of" to read.
+- Every experiment line logs `held_out`: the validation list's mean (>= 10 gold), the rotated-out case (leave-one-out,
+  3-9), or the mean over >= 3 synthetic cases written from the materials (< 3). A `validation_check` line for the same
+  experiment still counts.
+- The 3.5 fast path, the 4.3 ceiling, plateau and target stops, and the metric-first ship rule (the lower of the
+  metric and `held_out`) read it through `check_gate.py`. A metric above `held_out` by more than the noise threshold
+  is the overfitting signal: no fast path, the loop stays open. No `held_out` is not measured: the loop stays open
+  and metric-first ships UNSHIPPED. `max_iterations` (rubric.yaml) is now a loop-guard stop, the backstop for both.
+- Known weakness: under leave-one-out the held-out case was seen in the Phase 3 draft and in earlier experiments, and
+  one case against an N-1 mean carries case-difficulty spread, which the noise threshold (measured on training
+  re-runs) does not cover; if leave-one-out builds run to the budget and cost regresses, that threshold is the lever.
