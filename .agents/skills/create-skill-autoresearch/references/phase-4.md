@@ -46,7 +46,7 @@ The factory owns three records the upstream loop does not keep. Write them yours
 ## 4.2 Data Split
 
 Record the split in `work/evaluation/data-split.yaml`. With >= 10 gold standards, split **70% training**
-(every experiment), **20% validation** (checked adaptively, below) and **10% test** (held out until
+(every experiment), **20% validation** (every experiment's held-out score, below) and **10% test** (held out until
 Phase 5). With 3-9, use **leave-one-out rotation**: each experiment evaluates all but one, and its LOG
 step — after the keep/revert decision — advances the held-out case by rewriting the `training` list in
 data-split.yaml and committing that file alone
@@ -148,25 +148,32 @@ Seed `autoresearch.ideas.md` before the first experiment with:
 ```
 
 **Ending the loop is the factory's call, not the loop's.** Upstream treats a plateau as advisory, so an
-unreachable `target_score` burns the whole budget and reports "exit criteria not met". Override that:
+unreachable `target_score` burns the whole budget and reports "exit criteria not met". Override that, every stop
+reading the **held-out score** (4.2), never the training metric alone:
 
-- **A plateau is terminal.** `plateau_window` (default 2) consecutive experiments within the noise threshold (judge
-  variance, ~0.2-0.3 on a 1-10 scale, below which gains are not measurable) end the loop: carry best-so-far into Phase 5.
-- **The ceiling and the target are terminal sooner.** A best `overall_score` at its maximum (1.0) ends the loop before
-  the next experiment: nothing left to measure. At or above `target_score`, the first experiment that does not beat the
-  best by more than the noise threshold ends it.
+- **Overfitting is not done.** While the last kept experiment's `metric` is above its `held_out` by more than the
+  noise threshold, or any experiment lacks a numeric `held_out`, no stop below applies: keep iterating, until
+  `max_iterations` experiments after experiment 0 spend the budget, which ends the loop on its own.
+- **A plateau is terminal.** `plateau_window` (default 2) consecutive experiments whose `held_out` stays within the
+  noise threshold (judge variance, ~0.2-0.3 on a 1-10 scale, below which gains are not measurable) of the best kept end
+  the loop: carry best-so-far into Phase 5.
+- **The ceiling and the target are terminal sooner.** A best kept `held_out` at its maximum (1.0) ends the loop before
+  the next experiment: nothing left to measure. At or above `target_score`, the first experiment whose `held_out` does
+  not beat the best by more than the noise threshold ends it.
 - **Below target is a verdict, not a failure** -- Phase 5.4 grades it (SHIP WITH CAVEATS within
   `caveat_margin` of `target_score`). Honour `baseline_lock` in `state.yaml` the same way, logging the real target
   in the ideas backlog.
 - **With `metric: answer-key` this metric is the ship decision** (metric-first, SKILL.md 5.4): the last kept
-  experiment whose `commit` matches `output/<skill-name>/` as shipped -- with a validation split, the lower of its
-  `metric` and that experiment's `validation_score` -- is what `check_gate.py` sets against `target_score`. A skill
-  edited after its last scored experiment ships on no metric (`UNSHIPPED`), so log every re-score with its commit.
+  experiment whose `commit` matches `output/<skill-name>/` as shipped -- the lower of its `metric` and its
+  `held_out` -- is what `check_gate.py` sets against `target_score`. A skill edited after its last scored
+  experiment, or scored with no `held_out`, ships on no metric (`UNSHIPPED`), so log every re-score with its commit
+  and held-out score.
   The panel never sends such a build back here.
 - Never ask for repeated re-runs toward an unreachable number: report the ceiling, name the binding
   constraint (target too high, or gains below judge variance), and proceed.
-- **The loop guard enforces the fast path, the ceiling, the plateau and the target rule**, with the noise threshold
-  from the latest `noise_estimate` line (never below 0.01) and `plateau_window` from `rubric.yaml`: `python3
+- **The loop guard enforces the fast path, the budget, the overfitting signal, the ceiling, the plateau and the
+  target rule**, with the noise threshold from the latest `noise_estimate` line (never below 0.01) and
+  `plateau_window` and `max_iterations` from `rubric.yaml`: `python3
   <skill-dir>/scripts/check_gate.py --loop` prints `LOOP DONE: <reason>` or `LOOP OPEN: <reason>`, and while it
   is done the kill guard denies the metric command. On the panel-verdict path a panel ITERATE or BLOCK newer than the
   log reopens it for one experiment; a description-only change (4.6) may be scored.
