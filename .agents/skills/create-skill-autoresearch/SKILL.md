@@ -115,7 +115,8 @@ python3 <skill-dir>/scripts/check_gate.py --panel-receipt <role> <scores.json>  
 
 Then spawn 3 verifier subagents **in parallel** (one message), one agent per role. Each gets ONLY the skill's SKILL.md (a reference only when it asks for one by name), the gold standards, the rubric and the premortem risks: never research notes, `autoresearch.jsonl` or
 builder context. The roles (`<role>`): Verifier-A, quality (`verifier-a`); Verifier-B, utility (`verifier-b`);
-Devil's Advocate, explicitly adversarial (`devils-advocate`). Each member's prompt gives its role, the input paths
+Devil's Advocate, adversarial, always tries to smuggle an instruction in through content the skill fetches
+(`devils-advocate`). Each member's prompt gives its role, the input paths
 and `<skill-dir>`, and tells it to read its template and the role-receipt paragraph in "Panel Prompt Templates" of `<skill-dir>/references/consensus-protocol.md` (read only as a panel member).
 It scores every dimension independently (score, confidence 0-1, evidence: a verbatim quote in double quotes) and ends
 with `--panel-receipt`, which binds the scores to the skill and rubric hashes: a skill change voids every receipt.
