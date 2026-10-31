@@ -113,6 +113,14 @@ for ref in .agents/skills/create-skill-autoresearch/references/*.md; do
     $(grep -qF "$base" "$FACTORY_SKILL" && echo 1 || echo 0)
 done
 
+# Panel role files (references/panel/) sit one directory down, so the loop above misses them. Each must exist
+# and be named by SKILL.md, which sends every member to its own file instead of consensus-protocol.md.
+for role in verifier-a verifier-b devils-advocate synthesis member-rules; do
+  dim_crossref_max=$((dim_crossref_max + 1))
+  check crossref "SKILL.md names panel/$role.md (exists)" \
+    $([ -f ".agents/skills/create-skill-autoresearch/references/panel/$role.md" ] && grep -qF "panel/$role.md" "$FACTORY_SKILL" && echo 1 || echo 0)
+done
+
 # A reference over ~100 lines needs a Contents list, so a partial read still shows full scope.
 for ref in .agents/skills/create-skill-autoresearch/references/*.md; do
   ref_lines=$(wc -l < "$ref")
