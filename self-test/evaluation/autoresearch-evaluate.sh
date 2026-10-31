@@ -32,8 +32,8 @@ OPS_REF=".agents/skills/create-skill-autoresearch/references/operating-rules.md"
 FACTORY_DOCS=("$FACTORY_SKILL" "$OPS_REF" "$PHASE3_REF" "$PHASE4_REF" "$PHASE5_REF")
 factory_has() { grep -q "$@" "${FACTORY_DOCS[@]}" && echo 1 || echo 0; }
 # The factory runs the upstream autoresearch skill and owns the loop conventions it needs
-# (phase-4.md 4.1-4.3 + its Loop Conventions, whose git staging and owned-process rules live in
-# operating-rules.md); convention checks read this contract.
+# (phase-4.md 4.1-4.3, whose git staging and owned-process rules live in operating-rules.md); convention checks
+# read this contract. The main session's default-path budget is tests/test_context_budget.py's.
 AR_CONTRACT_FILES=("$FACTORY_SKILL" "$OPS_REF" "$PHASE4_REF")
 ar_count() { cat "${AR_CONTRACT_FILES[@]}" | grep -c "$@" || true; }
 ar_has() { grep -q "$@" "${AR_CONTRACT_FILES[@]}" && echo 1 || echo 0; }
@@ -97,7 +97,7 @@ dim_crossref_max=0
 
 # Check factory references resolve
 for ref in "references/phase-1-2.md" "references/rubric-templates.md" "references/consensus-protocol.md" \
-           "references/standalone-fallback.md" \
+           "references/standalone-fallback.md" "references/gate-runner.md" "references/evaluate-templates.md" \
            "references/benchmark-standard.md" "references/publishing.md"; do
   dim_crossref_max=$((dim_crossref_max + 1))
   FULL_PATH=".agents/skills/create-skill-autoresearch/$ref"
