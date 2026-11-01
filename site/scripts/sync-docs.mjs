@@ -25,11 +25,7 @@ const DOCS = [
   { src: 'docs/reference/tuning.md', route: 'tuning' },
   { src: 'docs/reference/metric-protocol.md', route: 'metric-protocol' },
   { src: 'docs/benchmarking.md', route: 'benchmarking' },
-  { src: 'self-test/benchmarks/premortem-rebuild.md', route: 'benchmark' },
-  {
-    src: '.agents/skills/create-skill-autoresearch/references/skill-authoring-best-practices.md',
-    route: 'skill-authoring-best-practices'
-  }
+  { src: 'self-test/benchmarks/premortem-rebuild.md', route: 'benchmark' }
 ]
 
 const norm = p => path.posix.normalize(String(p).replace(/\\/g, '/')).replace(/^\.\//, '')

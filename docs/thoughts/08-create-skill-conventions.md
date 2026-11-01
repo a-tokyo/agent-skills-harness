@@ -2,8 +2,9 @@
 
 Conventions our factory must follow. The authority is Anthropic's official
 [Skill authoring best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices);
-these are also compatible with Cursor's `create-skill`. The enforceable distillation the factory
-ships lives in `.agents/skills/create-skill-autoresearch/references/skill-authoring-best-practices.md`.
+these are also compatible with Cursor's `create-skill`. The factory enforces them through
+**skill-creator** and the Phase 3.3 pre-flight checklist, with the companion-free copy in
+`.agents/skills/create-skill-autoresearch/references/standalone-fallback.md`.
 
 ## Frontmatter (Required)
 

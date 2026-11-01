@@ -100,7 +100,7 @@ Phase 4 then stops, carries that result into Phase 5, and logs the real target i
 `work/experiments/autoresearch.ideas.md` so the gap is not forgotten. **Leave `target_score` alone** —
 that is the point of the flag. Overwriting the target to force an exit destroys the record of what you
 were actually aiming for. Full schema:
-[`pipeline-phases.md`](../../.agents/skills/create-skill-autoresearch/references/pipeline-phases.md).
+[`SKILL.md` 4.4](../../.agents/skills/create-skill-autoresearch/SKILL.md).
 
 *On v0.1.0*, where `baseline_lock` is not honoured, the manual equivalent is to record `best_score` and
 `best_commit`, set `target_score` at or just below that score so the criteria are satisfied, and note the

@@ -8,6 +8,5 @@ export default {
   tuning: 'Tuning a Run',
   'metric-protocol': 'METRIC Protocol',
   benchmarking: 'Benchmarking',
-  benchmark: 'Worked Benchmark',
-  'skill-authoring-best-practices': 'Skill-Authoring Best Practices'
+  benchmark: 'Worked Benchmark'
 }

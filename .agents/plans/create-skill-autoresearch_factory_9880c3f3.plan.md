@@ -9,7 +9,7 @@ todos:
     content: "Phase 1 MVP: Create SKILL.md for create-skill-autoresearch with 5-phase pipeline, interview flow, research spawning, draft generation, autoresearch invocation with LLM-as-judge evaluation, and handoff rules"
     status: pending
   - id: phase1-pipeline-ref
-    content: "Phase 1 MVP: Create references/pipeline-phases.md with detailed instructions for each of the 5 phases"
+    content: "Phase 1 MVP: Create the phase reference with detailed instructions for each of the 5 phases (now references/phase-1-2.md plus phase-3.md, phase-4.md, phase-5.md)"
     status: pending
   - id: phase1-rubric-ref
     content: "Phase 1 MVP: Create references/rubric-templates.md with universal dimensions and domain-specific templates"
@@ -141,7 +141,7 @@ README.md                     # Human-facing project overview and quick start
 .agents/skills/create-skill-autoresearch/
   SKILL.md                    # The factory skill (< 500 lines)
   references/
-    pipeline-phases.md        # Detailed phase instructions
+    phase-1-2.md              # Phase 1-2 detail (phase-3/4/5.md hold the rest)
     rubric-templates.md       # Universal + domain rubric templates
     consensus-protocol.md     # Panel scoring and consensus rules
 
@@ -217,7 +217,7 @@ Build the end-to-end pipeline with a single LLM judge. This gets a working facto
 
 - [`.agents/skills/create-skill-autoresearch/SKILL.md`](../../.agents/skills/create-skill-autoresearch/SKILL.md) -- the factory skill, following create-skill conventions (< 500 lines, third-person description with "Use when..." trigger, YAML frontmatter with `name` + `description`)
 
-- [`.agents/skills/create-skill-autoresearch/references/pipeline-phases.md`](../../.agents/skills/create-skill-autoresearch/references/pipeline-phases.md) -- detailed instructions for each of the 5 phases
+- [`.agents/skills/create-skill-autoresearch/references/phase-1-2.md`](../../.agents/skills/create-skill-autoresearch/references/phase-1-2.md) -- detailed instructions for Phases 1-2 (phase-3.md, phase-4.md, phase-5.md hold the rest)
 
 - [`.agents/skills/create-skill-autoresearch/references/rubric-templates.md`](../../.agents/skills/create-skill-autoresearch/references/rubric-templates.md) -- universal rubric dimensions + domain-specific templates
 

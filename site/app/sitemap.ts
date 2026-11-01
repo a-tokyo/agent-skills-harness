@@ -10,8 +10,7 @@ const DOC_ROUTES = [
   'architecture',
   'rubric-format',
   'metric-protocol',
-  'benchmark',
-  'skill-authoring-best-practices'
+  'benchmark'
 ]
 
 export default function sitemap(): MetadataRoute.Sitemap {

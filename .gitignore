@@ -175,3 +175,4 @@ tmp/
 # Local convenience mirror: .claude/skills/* are symlinks into .agents/skills/,
 # which is the tracked source of truth.
 .claude/skills/
+__pycache__/

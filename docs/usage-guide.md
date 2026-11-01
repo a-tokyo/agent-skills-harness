@@ -58,9 +58,10 @@ After all researchers complete, the factory synthesizes findings into `work/rese
 
 The factory:
 1. Creates a design document (`work/experiments/DESIGN.md`) locking structural decisions
-2. Generates an initial SKILL.md draft following the official skill-authoring rules
+2. Writes the initial SKILL.md draft with Anthropic's `skill-creator` (or, without it, from the factory's built-in checklist), moving lookups and arithmetic into bundled scripts
 3. Builds the evaluation pipeline (`work/evaluation/evaluate.sh`)
 4. Measures baseline quality against your gold standards
+5. With Claude Code, scaffolds a `claude plugin eval` suite in `work/evaluation/plugin/`: your held-out gold standards as cases, plus prompts that should and should not trigger the skill
 
 You'll see the baseline score and per-dimension breakdown.
 
@@ -100,12 +101,13 @@ The factory tracks progress in:
 
 After autoresearch, the factory runs independent verification:
 
-1. **Premortem**: Identifies risks in the skill design
-2. **Panel evaluation**: 3 independent verifier subagents score the skill:
+1. **Eval gate**: `claude plugin eval` runs the suite with and without the skill (3 runs each) and reports the difference per case. A held-out case where the skill adds nothing becomes a failure scenario for the panel
+2. **Premortem**: Identifies risks in the skill design
+3. **Panel evaluation**: 3 independent verifier subagents score the skill:
    - Verifier-A (Quality): correctness, completeness, clarity
    - Verifier-B (Utility): real-world usability, edge cases
    - Devil's Advocate: failure modes, hidden assumptions
-3. **Consensus**: Scores are compared. Disagreements trigger a synthesis round with anonymized rationales.
+4. **Consensus**: Scores are compared. Disagreements trigger a synthesis round with anonymized rationales.
 
 ### Outcomes
 
