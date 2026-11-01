@@ -22,8 +22,8 @@ python3 <skill-dir>/scripts/gate.py --detach --wait --model <model> [options]   
   passes `--backend manual`.
 - Every file under `work/evaluation/` (bar `baseline-cache/`) is a gate input: keep scratch and logs, a saved
   `check_gate.py` output included, under `work/experiments/`.
-- Smoke-test the suite with `--runs 1` before the full gate: a with-arm score of 0 while `skill-fired` passes means
-  the skill fired but could not act; check the tool grants and the fixtures. A 1-run artifact never passes.
+- No `--runs 1` smoke gate first (r18: 17 extra gate runs); the load check catches a broken case file. A with-arm
+  score of 0 while `skill-fired` passes means the skill fired but could not act: check the tool grants and fixtures.
 
 Read WITH, W/OUT and Δ per case from the artifact:
 - Δ <= 0 on a gold case is a **verified failure scenario** for the panel: the skill adds nothing there, or hurts; on

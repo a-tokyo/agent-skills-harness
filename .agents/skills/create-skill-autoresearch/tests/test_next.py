@@ -143,6 +143,24 @@ class NextTest(MetricFirstFixture):
         self.assertIn("--allow-tools Bash Write Read", command)
         self.assertIn("--jobs 4", command)
 
+    def test_a_smoke_gate_is_followed_by_the_full_gate_never_another_smoke(self) -> None:
+        self.evaluate()
+        self.log(0.95)
+        self.assertEqual(self.run_script("gate.py", "--model", "m", "--runs", "1").returncode, 1)
+        command = self.next().splitlines()[1]
+        self.assertIn("--restart --wait --model m", command)
+        self.assertNotIn("--runs", command, "--next drops a --runs below the required count")
+
+    def test_an_edit_after_the_gate_goes_through_phase_4_not_straight_back_to_the_gate(self) -> None:
+        self.rubric("llm-judge")
+        self.evaluate()
+        self.log(0.95)
+        self.gate()
+        self.edit_skill()
+        out = self.next()
+        self.assertTrue(out.startswith("NEXT: Phase 4 (phase-4.md): LOOP OPEN"), out)
+        self.assert_no_gate(out)
+
     def test_a_trigger_miss_returns_to_the_description_pass(self) -> None:
         self.evaluate()
         self.log(0.95)
