@@ -2,6 +2,7 @@
 """Validate the Phase 5.0 gate, the panel's receipts and consensus, and the build's end state.
 
     check_gate.py --next     # from 3.5 on, at every phase boundary: the one next action, as the exact command
+    check_gate.py --next --profile lite   # once, small or fast builder models: stored in work/manifest.yaml
     check_gate.py [--workspace DIR] [--skill NAME] [--json]
                   [--next | --panel | --panel-receipt ROLE SCORES_JSON [--synthesis] | --consensus | --finish
                    | --fast-path | --loop]
@@ -10,6 +11,10 @@
 consensus, finish) and prints `NEXT: <what>` with the exact command(s) to run, or `BUILD FINISHED: verdict <V>`.
 It never sends the build to the gate while the Phase 4 loop is open or a metric-first skill is unscored, never
 restarts a running gate, and once all three receipts are in it writes the consensus as --consensus does. Exit 0.
+
+--profile lite|full (with --next): write the build's profile into work/manifest.yaml; every script reads it there
+(CSA_PROFILE=lite|full in the environment wins). lite, for small builder models, runs one `reviewer` panel member
+with no synthesis round, smaller Phase 4 caps and fewer gate runs per arm (verdict-rules.json `lite`).
 
 No flag: exit 0 only when work/evaluation/gate.json records a finished gate.py run whose hashes still match the
 skill, cases, splits, run-case.sh, gate inputs and artifact, and the mode's artifact (plugin-eval.json or
@@ -49,8 +54,8 @@ import run_owned  # noqa: E402
 from gate_common import (  # noqa: E402
     BASELINE_KEY, DATA_SPLIT, GATE_ATTEMPTS, GATE_RECORD, MANUAL_ARTIFACT, PLUGIN_ARTIFACT, REQUIRED_RUNS, RUN_CASE,
     GateError, baseline_key, baseline_path, cases_sha256, check_skill_name, file_sha256, inputs_sha256, is_number,
-    json_lines, read_attempts, read_baseline, read_data_split, read_json, resolve_skill, skill_sha256, split_sha256,
-    utf8_stdio,
+    PROFILES, json_lines, profile, read_attempts, read_baseline, read_data_split, read_json, resolve_skill,
+    set_profile, skill_sha256, split_sha256, utf8_stdio,
 )
 
 BENCHMARK = Path("BENCHMARK.md")
@@ -903,14 +908,22 @@ def main(argv: list[str] | None = None) -> int:
     step.add_argument("--fast-path", action="store_true", help="3.5: may the build skip the Phase 4 loop")
     step.add_argument("--loop", action="store_true", help="4.3: is the Phase 4 loop over (the loop guard's check)")
     step.add_argument("--next", action="store_true", help="the build's single next action, as the exact command")
+    parser.add_argument("--profile", choices=PROFILES, help="with --next: store the build's profile (lite: small "
+                                                             "builder models) in work/manifest.yaml")
     parser.add_argument("--synthesis", action="store_true", help="with --panel-receipt: the synthesis round (5.3)")
     parser.add_argument("--verbose", action="store_true", help="longer lines where the default is terse")
     args = parser.parse_args(argv)
     if args.synthesis and not args.panel_receipt:
         parser.error("--synthesis goes with --panel-receipt")
+    if args.profile and not args.next:
+        parser.error("--profile goes with --next")
     workspace = args.workspace.resolve()
     if args.next:
+        if args.profile:
+            set_profile(workspace, args.profile)
         action = next_action(workspace, args.skill)
+        if profile(workspace) == "lite":
+            action.before.insert(0, "PROFILE: lite (verdict-rules.json `lite`)")
         print(json.dumps(asdict(action)) if args.json else action.render())
         return 0
     if args.fast_path:
