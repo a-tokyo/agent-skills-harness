@@ -36,8 +36,8 @@ class RescoreTest(MetricFirstFixture):
         self.log(0.91)
         self.edit_skill("Fixed after the panel.")
 
-    def edit_skill(self, description: str, commit: bool = True) -> None:
-        (self.ws / "output" / "demo" / "SKILL.md").write_text(f"---\nname: demo\ndescription: {description}\n---\n# Demo\n")
+    def edit_skill(self, body: str, commit: bool = True) -> None:
+        (self.ws / "output" / "demo" / "SKILL.md").write_text(f"---\nname: demo\ndescription: Demo.\n---\n# Demo\n\n{body}\n")
         if commit:
             self.git("add", "output")
             self.git("commit", "-q", "-m", "post-loop fix")
@@ -55,9 +55,10 @@ class RescoreTest(MetricFirstFixture):
 
     def test_it_logs_the_current_commit_and_the_ship_rule_then_reads_it(self) -> None:
         self.gate()
-        consensus, rule = self.panel(HIGH)[:2]
+        consensus, rule, hint = self.panel(HIGH)
         self.assertIn("metric: none (no kept experiment", rule)
         self.assertTrue(rule.startswith("SHIP RULE: UNSHIPPED"), rule)
+        self.assertEqual(hint, self.command(), "the command on its own line, ready to run")
         out = self.run_script("rescore.py")
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         self.assertIn("RESCORED: experiment 1 commit", out.stdout)
@@ -68,7 +69,8 @@ class RescoreTest(MetricFirstFixture):
         self.assertNotIn("type", line, "check_gate.py reads only experiment lines; a typed line is invisible")
         self.assertEqual(self.runs(), 3, "the training metric once, each of the two validation cases once")
         out = self.run_script("check_gate.py", "--consensus")
-        consensus, rule = out.stdout.strip().splitlines()[:2]
+        self.assertEqual(out.returncode, 0, out.stdout)
+        consensus, rule = out.stdout.strip().splitlines()
         self.assertEqual(rule, "SHIP RULE: SHIP (metric-first); gate: every gold delta > 0; metric: experiment 1 "
                                "0.920, held_out 0.880 -> 0.880 target 0.85; veto: none")
         self.assertTrue(self.finish("SHIP", consensus, rule)["finished"])
@@ -114,11 +116,63 @@ class RescoreTest(MetricFirstFixture):
         self.assertIn("judge down", out.stdout)
         self.assertEqual(len(self.lines()), 1)
 
+    def test_check_gate_prints_the_command_wherever_the_metric_is_missing(self) -> None:
+        self.gate()
+        consensus, rule, hint = self.panel(HIGH)
+        data = self.finish("SHIP", consensus, rule)
+        self.assertIn("the Phase 4 metric is unset for output/demo/ as it is now", data["reason"])
+        self.assertEqual(data["reason"].splitlines()[-1], self.command())
+        finish = self.run_script("check_gate.py", "--finish").stdout.splitlines()
+        self.assertEqual(finish[-1], self.command(), "the --finish line ends with the command on its own line")
+
+    def test_unshipped_only_for_want_of_a_score_is_sent_back_to_score_it(self) -> None:
+        self.gate()
+        consensus, rule, _ = self.panel(HIGH)
+        data = self.finish("UNSHIPPED", consensus, rule)
+        self.assertFalse(data["finished"], "the d18 Haiku shape: UNSHIPPED because the fix was never scored")
+        self.assertIn("the Phase 4 metric is unset for output/demo/", data["reason"])
+        self.assertEqual(data["reason"].splitlines()[-1], self.command())
+
+    def test_a_veto_keeps_unshipped_without_a_score(self) -> None:
+        self.gate()
+        veto = {"kind": "safety", "evidence": '"name: demo"', "repro": "run it on input/gold-01.md: it deletes the workspace"}
+        consensus, rule, hint = self.panel(HIGH, **{"devils-advocate": {"veto": veto}})
+        self.assertIn("veto: devils-advocate", rule)
+        self.assertEqual(hint, self.command())
+        self.assertTrue(self.finish("UNSHIPPED", consensus, rule)["finished"])
+
+    def test_loop_done_prints_the_command_when_the_skill_is_unscored(self) -> None:
+        self.log(1.0)  # held out at the 1.0 ceiling: the loop is done, and the fix after it is unscored
+        out = self.run_script("check_gate.py", "--loop")
+        lines = out.stdout.strip().splitlines()
+        self.assertTrue(lines[0].startswith("LOOP DONE:"), out.stdout)
+        self.assertIn("has no score", lines[0])
+        self.assertEqual(lines[-1], self.command())
+        self.assertEqual(self.run_script("rescore.py").returncode, 0)
+        out = self.run_script("check_gate.py", "--loop")
+        self.assertNotIn("rescore.py", out.stdout, "scored: no command")
+
+    def test_the_finish_guard_send_back_carries_the_command(self) -> None:
+        self.gate()
+        consensus, rule, _ = self.panel(HIGH)
+        self.finish("SHIP", consensus, rule)
+        guard = SCRIPTS.parent / "hooks" / "finish_guard.py"
+        env = {k: v for k, v in os.environ.items() if k != "CSA_EXECUTOR"}
+        out = subprocess.run([sys.executable, "-B", str(guard)], input=json.dumps(
+            {"hook_event_name": "Stop", "cwd": str(self.ws), "stop_hook_active": False}),
+            capture_output=True, text=True, timeout=60, env=env)
+        reason = json.loads(out.stdout)["reason"]
+        self.assertIn("\n" + self.command() + "\n", reason)
+
     def test_the_loop_guard_lets_the_rescore_through_when_the_loop_is_done(self) -> None:
         sys.path.insert(0, str(SCRIPTS.parent / "hooks"))
         import kill_guard  # noqa: E402
 
         self.assertIsNone(kill_guard.loop_block(self.command(), str(self.ws)))
+
+    def panel(self, scores: dict = HIGH, **extra: dict) -> list[str]:  # type: ignore[override]
+        lines = super().panel(scores, **extra)
+        return lines + [""] * (3 - len(lines))
 
 
 class RescoreHelpTest(unittest.TestCase):

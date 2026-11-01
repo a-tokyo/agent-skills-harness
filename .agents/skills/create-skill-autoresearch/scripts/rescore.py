@@ -37,16 +37,10 @@ from gate_common import DATA_SPLIT, GateError, is_number, read_data_split, resol
 EVALUATE = Path("work") / "evaluation" / "evaluate.sh"
 METRIC = re.compile(r"^METRIC ([\w.-]+)=(-?[0-9.]+(?:[eE][-+]?\d+)?)\s*$", re.MULTILINE)
 STATUS = "rescore"
-COMMAND = Path(__file__).resolve()
 
 
 class CannotScore(Exception):
     """Why the skill cannot be scored now; the message says what to do."""
-
-
-def command(workspace: Path) -> str:
-    """The one line every 'metric missing' message prints (check_gate.py, the finish guard)."""
-    return f"python3 {COMMAND} --workspace {workspace}"
 
 
 def held_out_cases(workspace: Path) -> list[str]:

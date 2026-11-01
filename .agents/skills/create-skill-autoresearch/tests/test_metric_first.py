@@ -143,7 +143,8 @@ class MetricFirstTest(MetricFirstFixture):
     def test_no_held_out_score_ships_unshipped(self) -> None:
         self.log(1.0, held_out=None)
         self.gate()
-        consensus, rule = self.panel({"verifier-a": (9, 9), "verifier-b": (9, 9), "devils-advocate": (9, 9)})
+        consensus, rule, rescore = self.panel({"verifier-a": (9, 9), "verifier-b": (9, 9), "devils-advocate": (9, 9)})
+        self.assertIn("scripts/rescore.py --workspace", rescore, "the command that scores it, on its own line")
         self.assertEqual(rule, "SHIP RULE: UNSHIPPED (metric-first); gate: every gold delta > 0; metric: none "
                                "(experiment 0 logs no numeric held_out: no held-out score to ship on, phase-4.md "
                                "4.2); veto: none")
@@ -155,8 +156,9 @@ class MetricFirstTest(MetricFirstFixture):
         self.log(0.95)
         (self.ws / "output" / "demo" / "SKILL.md").write_text("---\nname: demo\ndescription: Unscored.\n---\n# Demo\n")
         self.gate()
-        _, rule = self.panel()
+        _, rule, rescore = self.panel()
         self.assertTrue(rule.startswith("SHIP RULE: UNSHIPPED (metric-first)"), rule)
+        self.assertTrue(rescore.startswith("python3 ") and "rescore.py" in rescore, rescore)
         self.assertIn("no kept experiment in autoresearch.jsonl scored output/demo/ as it is now", rule)
 
     def test_a_gold_delta_at_or_below_zero_caps_the_gate(self) -> None:
