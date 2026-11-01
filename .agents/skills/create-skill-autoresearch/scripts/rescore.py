@@ -21,8 +21,11 @@ the 600 s a Claude Code shell call may wait (timeout 600000), and exits 124 whil
 command again: it re-attaches to the running job, or reports its result once it has ended, and never starts a
 second scoring run. The loop guard does not stop it: a re-score is not a loop experiment.
 
+Under the lite profile (verdict-rules.json lite rescores_per_commit) each commit is re-scored once: a second call on
+a commit that already has a rescore attempt prints `RESCORE REFUSED` and the next step (check_gate.py --next).
+
 Exit codes: 0 scored or already scored, 1 cannot score (no evaluate.sh, uncommitted skill, no git, no held-out
-case, an evaluate.sh run without a METRIC overall_score line), 2 usage error, 3 another `rescore` job state error,
+case, an evaluate.sh run without a METRIC overall_score line) or refused (lite), 2 usage error, 3 another `rescore` job state error,
 124 still running (issue it again).
 """
 
@@ -40,7 +43,7 @@ sys.dont_write_bytecode = True
 import check_gate  # noqa: E402  (sibling imports after disabling bytecode)
 import run_owned  # noqa: E402
 from gate_common import (  # noqa: E402
-    DATA_SPLIT, GateError, is_number, log_attempt, read_data_split, resolve_skill, utf8_stdio,
+    DATA_SPLIT, GateError, is_number, lite_rules, log_attempt, profile, read_attempts, read_data_split, resolve_skill, utf8_stdio,
 )
 
 EVALUATE = Path("work") / "evaluation" / "evaluate.sh"
@@ -56,6 +59,7 @@ class CannotScore(Exception):
     def __init__(self, reason: str, logged: bool = True) -> None:
         super().__init__(reason)
         self.logged = logged
+        self.commit: str | None = None  # set once HEAD is known
 
 
 def held_out_cases(workspace: Path) -> list[str]:
@@ -120,11 +124,31 @@ def prepare(workspace: Path, skill: str | None) -> tuple[str, list[str], str, st
     return name, cases, commit, (how if value is not None else None)
 
 
+def refused(workspace: Path, commit: str) -> str | None:
+    """The lite profile rescores each commit once: the refusal, with the next step, when a rescore attempt (scored
+    or not) is already logged for `commit`; else None."""
+    if profile(workspace) != "lite" or sum(1 for a in read_attempts(workspace) if a.get("step") == "rescore"
+                                           and a.get("commit") == commit) < lite_rules()["rescores_per_commit"]:
+        return None
+    return (f"RESCORE REFUSED: commit {commit[:12]} was already re-scored (lite profile: one rescore per skill commit; "
+            "a second run cannot change the score). Next: "
+            f"python3 {Path(__file__).resolve().parent / 'check_gate.py'} --workspace {workspace} --next")
+
+
 def rescore(workspace: Path, skill: str | None) -> tuple[bool, dict | str]:
     """(scored now, the logged line) or (False, the ALREADY SCORED reading)."""
     name, cases, commit, already = prepare(workspace, skill)
     if already is not None:
         return False, already
+    try:
+        return True, score(workspace, name, cases, commit)
+    except CannotScore as exc:
+        exc.commit = commit
+        raise
+
+
+def score(workspace: Path, name: str, cases: list[str], commit: str) -> dict:
+    """Run the metric and every held-out case once and append the experiment line."""
     metric, scores = evaluate(workspace)
     held = [evaluate(workspace, case)[0] for case in cases]
     _, experiments, _ = check_gate._experiments(workspace)
@@ -136,7 +160,7 @@ def rescore(workspace: Path, skill: str | None) -> tuple[bool, dict | str]:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a", encoding="utf-8") as fh:
         fh.write(json.dumps(line) + "\n")
-    return True, line
+    return line
 
 
 def _inside_job(workspace: Path) -> bool:
@@ -156,13 +180,13 @@ def score_now(workspace: Path, skill: str | None) -> int:
         scored, result = rescore(workspace, skill)
     except CannotScore as exc:
         if exc.logged and (workspace / "work").is_dir():
-            log_attempt(workspace, "rescore", str(exc).splitlines()[0])
+            log_attempt(workspace, "rescore", str(exc).splitlines()[0], **({"commit": exc.commit} if exc.commit else {}))
         print(f"CANNOT RESCORE: {exc}")
         return 1
     if not scored:
         print(f"ALREADY SCORED: {result}; nothing to do")
         return 0
-    log_attempt(workspace, "rescore")
+    log_attempt(workspace, "rescore", commit=result["commit"])
     print(f"RESCORED: experiment {result['experiment']} commit {result['commit'][:12]} metric {result['metric']:.3f} "
           f"held_out {result['held_out']:.3f}; logged to {log_path(workspace).relative_to(workspace).as_posix()}")
     return 0
@@ -184,7 +208,10 @@ def supervise(workspace: Path, skill: str | None, timeout: float = run_owned.WAI
         attach = False
     if not attach:
         try:
-            _, _, _, already = prepare(workspace, skill)
+            _, _, commit, already = prepare(workspace, skill)
+            if refusal := refused(workspace, commit):
+                print(refusal)
+                return 1
         except CannotScore as exc:
             if exc.logged and (workspace / "work").is_dir():
                 log_attempt(workspace, "rescore", str(exc).splitlines()[0])

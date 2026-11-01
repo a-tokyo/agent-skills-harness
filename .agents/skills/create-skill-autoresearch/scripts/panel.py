@@ -21,7 +21,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path, PurePosixPath
 
 from gate_common import EVAL_DIR, GateError, _strip_comment, _unquote, check_skill_name, \
-    file_sha256, is_number, log_attempt, now, read_attempts, read_json, skill_sha256, write_json
+    file_sha256, is_number, lite_rules, log_attempt, now, profile, read_attempts, read_json, skill_sha256, write_json
 
 RUBRIC = EVAL_DIR / "rubric.yaml"
 PANEL_DIR = PurePosixPath("work") / "experiments" / "panel"
@@ -122,6 +122,8 @@ def read_rubric(workspace: Path) -> Rubric:
         raise GateError(f"{RUBRIC}: needs a `dimensions:` block list of uniquely named dimensions")
     if abs(sum(d.weight for d in dims) - 1) > 0.01:
         raise GateError(f"{RUBRIC}: dimension weights sum to {sum(d.weight for d in dims):g}, not 1.0")
+    if profile(workspace) == "lite":  # small builders: the Phase 4 caps, the lower of rubric.yaml's and lite's
+        window, budget = min(window, lite_rules()["plateau_window"]), min(budget, lite_rules()["max_iterations"])
     return Rubric(dims, rules()["default_target_score"] if target is None else target, file_sha256(path), window,
                   checkable, budget)
 

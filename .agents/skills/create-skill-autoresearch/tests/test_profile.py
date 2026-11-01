@@ -14,6 +14,8 @@ from pathlib import Path
 from unittest import mock
 
 from helpers import SCRIPTS, TempWorkspace
+import test_metric_first
+import test_rescore
 import check_gate  # noqa: E402  (on sys.path through helpers)
 import gate_common  # noqa: E402
 
@@ -90,6 +92,69 @@ class LiteGateTest(TempWorkspace):
             command = check_gate.gate_command(self.ws, "demo")
         self.assertIn("--model m", command)
         self.assertNotIn("--runs", command, "the recorded 2 runs are the lite default, not an override")
+
+
+class LiteLoopTest(test_metric_first.MetricFirstFixture):
+    """Phase 4 caps: the lower of rubric.yaml's max_iterations / plateau_window and lite's (3 / 2)."""
+
+    def experiments(self, *held: float) -> None:
+        self.log(held[0], *({"experiment": n, "commit": self.commit, "metric": h, "held_out": h, "status": "keep"}
+                            for n, h in enumerate(held[1:], 1)))
+
+    def loop(self, profile: str) -> str:
+        return self.run_script("check_gate.py", "--loop", CSA_PROFILE=profile).stdout
+
+    def test_three_experiments_spend_the_lite_budget(self) -> None:
+        self.experiments(0.50, 0.60, 0.70, 0.75)  # each gains, under target_score 0.85: no other stop holds
+        self.assertTrue(self.loop("full").startswith("LOOP OPEN"), self.loop("full"))
+        self.assertIn("LOOP DONE: the budget is spent: 3 experiments, max_iterations 3", self.loop("lite"))
+
+    def test_lite_caps_a_longer_plateau_window_at_two(self) -> None:
+        rubric = self.ws / "work" / "evaluation" / "rubric.yaml"
+        rubric.write_text(rubric.read_text().replace("max_iterations: 20", "max_iterations: 20\nplateau_window: 5"))
+        self.experiments(0.50, 0.50, 0.50)
+        self.assertTrue(self.loop("full").startswith("LOOP OPEN"), self.loop("full"))
+        self.assertIn("plateau_window 2", self.loop("lite"))
+
+    def test_a_smaller_rubric_value_stands(self) -> None:
+        rubric = self.ws / "work" / "evaluation" / "rubric.yaml"
+        rubric.write_text(rubric.read_text().replace("max_iterations: 20", "max_iterations: 1"))
+        self.experiments(0.50, 0.60)
+        self.assertIn("max_iterations 1", self.loop("lite"))
+
+
+class LiteRescoreTest(test_metric_first.MetricFirstFixture):
+    """The lite profile re-scores each skill commit once; a second call is refused with the next step."""
+
+    def setUp(self) -> None:  # test_rescore.RescoreTest's build, without inheriting its tests
+        super().setUp()
+        evaluation = self.ws / "work" / "evaluation"
+        split = evaluation / "data-split.yaml"
+        split.write_text(split.read_text() + 'validation: ["input/v1.md", "input/v2.md"]\n')
+        (evaluation / "evaluate.sh").write_text(test_rescore.EVALUATE)
+        self.log(0.91)
+        self.edit_skill("Fixed after the panel.")
+
+    edit_skill = test_rescore.RescoreTest.edit_skill
+    runs = test_rescore.RescoreTest.runs
+
+    def test_a_second_rescore_on_the_same_commit_is_refused_with_the_next_step(self) -> None:
+        self.assertIn("RESCORED", self.run_script("rescore.py", CSA_PROFILE="lite").stdout)
+        out = self.run_script("rescore.py", CSA_PROFILE="lite")
+        self.assertEqual(out.returncode, 1, out.stdout + out.stderr)
+        self.assertIn("RESCORE REFUSED: commit", out.stdout)
+        self.assertIn("check_gate.py --workspace", out.stdout)
+        self.assertIn("--next", out.stdout)
+        self.assertEqual(self.runs(), 3, "nothing re-ran")
+        self.assertIn("ALREADY SCORED", self.run_script("rescore.py", CSA_PROFILE="full").stdout, "full: unchanged")
+
+    def test_a_failed_rescore_is_not_retried_on_the_same_commit(self) -> None:
+        (self.ws / "judge-down").write_text("")
+        self.assertIn("CANNOT RESCORE", self.run_script("rescore.py", CSA_PROFILE="lite").stdout)
+        (self.ws / "judge-down").unlink()
+        self.assertIn("RESCORE REFUSED", self.run_script("rescore.py", CSA_PROFILE="lite").stdout)
+        self.edit_skill("Fixed again.")
+        self.assertIn("RESCORED", self.run_script("rescore.py", CSA_PROFILE="lite").stdout, "a new commit scores")
 
 
 class LiteRulesTest(unittest.TestCase):
