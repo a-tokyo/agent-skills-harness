@@ -49,7 +49,7 @@ from gate_common import (  # noqa: E402
     BASELINE_CACHE, DATA_SPLIT, GATE_RECORD, MANUAL_ARTIFACT, PLUGIN_ARTIFACT, PLUGIN_DIR, REQUIRED_RUNS, RUN_CASE,
     GateError, baseline_key, baseline_path, cases_sha256, check_skill_name, file_sha256, inputs_sha256,
     model_invoked, now, omitted_gold, read_baseline, read_data_split, read_json, resolve_skill,
-    log_attempt, skill_sha256, split_sha256, utf8_stdio, write_gate_cases, write_json,
+    log_attempt, profile, required_runs, skill_sha256, split_sha256, utf8_stdio, write_gate_cases, write_json,
 )
 
 EXIT_INVALID, EXIT_PRECONDITION, EXIT_STOPPED = 1, 3, 143
@@ -383,7 +383,8 @@ def run_gate(ws: Path, args: argparse.Namespace) -> int:
         artifact = PLUGIN_ARTIFACT if mode == "plugin" else MANUAL_ARTIFACT
         record = {"mode": mode, "backend": args.backend or default_backend(), "plugin_eval_available": available,
                   "model_invoked": invoked, "force_manual": args.force_manual, "fresh_baseline": args.fresh_baseline,
-                  "skill": skill, "model": args.model, "runs": args.runs, "in_sample": args.in_sample,
+                  "skill": skill, "model": args.model, "runs": args.runs, "profile": profile(ws),
+                  "in_sample": args.in_sample,
                   "executor": args.executor, "cases": cases, "artifact": artifact.as_posix(),
                   "backend_arg": args.backend, "allow_tools": args.allow_tools, "jobs": args.jobs,  # check_gate --next
                   "options_sha256": options_sha256(args),
@@ -603,7 +604,8 @@ def main(argv: list[str] | None = None) -> int:
     add("--backend", choices=["plugin", "manual"], help="default: plugin inside Claude Code when it can run, else manual")
     add("--force-manual", metavar="'<host>: <reason>'", help="with --backend manual, on another host inheriting $CLAUDECODE")
     add("--model", help="the model the skill targets, pinned for both arms (required to start a gate)")
-    add("--runs", type=int, default=REQUIRED_RUNS, help=f"runs per arm per case (default and required {REQUIRED_RUNS})")
+    add("--runs", type=int, help=f"runs per arm per case (default and required: {REQUIRED_RUNS}; the lite profile "
+                                 "2, verdict-rules.json lite runs_per_arm)")
     add("--jobs", type=int, default=DEFAULT_JOBS, help=f"concurrent runs, 1-8 (default {DEFAULT_JOBS})")
     add("--allow-tools", nargs="+", default=["Bash", "Write"], help="plugin mode: gated tools (default: Bash Write)")
     add("--in-sample", action="store_true", help="the gate cases are also training cases (3-9 gold standards)")
@@ -638,10 +640,11 @@ def main(argv: list[str] | None = None) -> int:
     bare_wait = args.wait and not (args.detach or args.restart)
     if not (args.stop or bare_wait) and not args.model:
         parser.error("--model is required (except with --stop or a bare --wait)")
+    ws = args.workspace.resolve()
+    args.runs = required_runs(ws) if args.runs is None else args.runs
     if args.runs < 1 or not 1 <= args.jobs <= 8:
         parser.error("--runs must be >= 1 and --jobs 1-8")
 
-    ws = args.workspace.resolve()
     sdir = run_owned.state_dir(ws)
     try:
         if args.stop:

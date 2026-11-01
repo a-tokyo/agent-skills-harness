@@ -52,9 +52,9 @@ sys.dont_write_bytecode = True
 import panel  # noqa: E402  (sibling imports after disabling bytecode)
 import run_owned  # noqa: E402
 from gate_common import (  # noqa: E402
-    BASELINE_KEY, DATA_SPLIT, GATE_ATTEMPTS, GATE_RECORD, MANUAL_ARTIFACT, PLUGIN_ARTIFACT, REQUIRED_RUNS, RUN_CASE,
+    BASELINE_KEY, DATA_SPLIT, GATE_ATTEMPTS, GATE_RECORD, MANUAL_ARTIFACT, PLUGIN_ARTIFACT, RUN_CASE,
     GateError, baseline_key, baseline_path, cases_sha256, check_skill_name, file_sha256, inputs_sha256, is_number,
-    PROFILES, json_lines, profile, read_attempts, read_baseline, read_data_split, read_json, resolve_skill,
+    PROFILES, json_lines, profile, required_runs, read_attempts, read_baseline, read_data_split, read_json, resolve_skill,
     set_profile, skill_sha256, split_sha256, utf8_stdio,
 )
 
@@ -179,7 +179,7 @@ def _cases(data: dict, artifact: str) -> list[dict]:
     return cases
 
 
-def _plugin(data: dict, recorded: list[str]) -> list[CaseResult]:
+def _plugin(data: dict, recorded: list[str], required: int) -> list[CaseResult]:
     """Cases are classed by their graders: only `tool_used` on `Skill` makes a should-trigger indicator (`max: 0`:
     a near miss); anything else is gold and needs a numeric delta. Every indicator must pass in every run that
     counts: a trigger in the with arm, a near miss in both."""
@@ -189,9 +189,9 @@ def _plugin(data: dict, recorded: list[str]) -> list[CaseResult]:
         done = {arm: [r for r in arms.get(arm) if isinstance(r, dict) and not r.get("error")]
                 if isinstance(arms.get(arm), list) else [] for arm in ("with", "without")}
         for arm, runs in done.items():
-            if len(runs) < REQUIRED_RUNS:
+            if len(runs) < required:
                 raise Invalid("too_few_runs", f"case {name!r} arm {arm!r} has {len(runs)} completed runs; "
-                                              f"{REQUIRED_RUNS} required")
+                                              f"{required} required")
         delta = (case.get("aggregates") or {}).get("delta")
         result = CaseResult(name, float(delta) if is_number(delta) else None)
         graders = [g for g in case.get("graders") or [] if isinstance(g, dict)]
@@ -242,14 +242,15 @@ def _manual(data: dict, recorded: list[str], workspace: Path) -> list[CaseResult
     """Every manual case is gold: its delta is mean(with) - mean(without)."""
     results = []
     summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    required = required_runs(workspace)
     for case in _cases(data, "uplift.json"):
         name = str(case.get("case"))
         for arm in ("with", "without"):
             runs = case.get(arm)
             if not isinstance(runs, list) or not all(is_number(s) and 0 <= s <= 1 for s in runs):
                 raise Invalid("bad_artifact", f"case {name!r} arm {arm!r} is not a list of scores in 0..1")
-            if len(runs) < REQUIRED_RUNS:
-                raise Invalid("too_few_runs", f"case {name!r} arm {arm!r} has {len(runs)} runs; {REQUIRED_RUNS} required")
+            if len(runs) < required:
+                raise Invalid("too_few_runs", f"case {name!r} arm {arm!r} has {len(runs)} runs; {required} required")
         if "without_cache" in case:
             _reused_baseline(workspace, name, case, summary)
         results.append(CaseResult(name, _mean(case["with"]) - _mean(case["without"])))
@@ -284,7 +285,8 @@ def validate(workspace: Path, skill: str | None = None) -> Verdict:
         data = read_json(workspace / rel)
         if data is None:
             raise Invalid("bad_artifact", f"{rel} is not a JSON object")
-        results = _plugin(data, split.plugin_eval) if mode == "plugin" else _manual(data, split.plugin_eval, workspace)
+        results = (_plugin(data, split.plugin_eval, required_runs(workspace)) if mode == "plugin" else
+                   _manual(data, split.plugin_eval, workspace))
         if split.gold_recorded and not any(r.kind == "gold" for r in results):
             raise Invalid("no_gold", f"{DATA_SPLIT} records gold standards but no gate case is a gold case "
                                      "(every case grades only `tool_used` on Skill); 3.6 adds one per gate "
@@ -546,7 +548,8 @@ def _gold_non_positive(workspace: Path) -> list[str]:
         data = read_json(workspace / (PLUGIN_ARTIFACT if plugin else MANUAL_ARTIFACT))
         if data is None or not split.plugin_eval:
             return []
-        results = _plugin(data, split.plugin_eval) if plugin else _manual(data, split.plugin_eval, workspace)
+        results = (_plugin(data, split.plugin_eval, required_runs(workspace)) if plugin else
+                   _manual(data, split.plugin_eval, workspace))
     except (GateError, Invalid):
         return []
     return [r.name for r in results if r.kind == "gold" and r.delta is not None and r.delta <= 0]
@@ -735,7 +738,7 @@ def gate_command(workspace: Path, skill: str, restart: bool = False) -> str:
             args += ["--allow-tools", *map(_q, tools)]
         if is_number(record.get("jobs")) and record["jobs"] != 8:
             args += ["--jobs", str(record["jobs"])]
-        if is_number(record.get("runs")) and record["runs"] > REQUIRED_RUNS:
+        if is_number(record.get("runs")) and record["runs"] > required_runs(workspace):
             args += ["--runs", str(record["runs"])]
         return " ".join(args)
     try:
