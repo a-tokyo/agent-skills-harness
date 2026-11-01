@@ -384,6 +384,7 @@ def run_gate(ws: Path, args: argparse.Namespace) -> int:
                   "model_invoked": invoked, "force_manual": args.force_manual, "fresh_baseline": args.fresh_baseline,
                   "skill": skill, "model": args.model, "runs": args.runs, "in_sample": args.in_sample,
                   "executor": args.executor, "cases": cases, "artifact": artifact.as_posix(),
+                  "backend_arg": args.backend, "allow_tools": args.allow_tools, "jobs": args.jobs,  # check_gate --next
                   "options_sha256": options_sha256(args),
                   **_input_hashes(ws, skill, cases), "started": now(), "finished": None}
         write_json(ws / GATE_RECORD, record)
