@@ -6,6 +6,9 @@ SKILL.md and the final receipts. The thresholds and max_panel_rounds live in ref
 the protocol in references/consensus-protocol.md; rubric.yaml's schema (read here by a small stdlib reader:
 target_score, plateau_window, max_iterations, metric, and dimensions with name, weight, scale) in
 references/rubric-templates.md.
+Under the lite profile (gate_common.profile) the panel is one `reviewer` (references/panel/reviewer.md) holding
+the Devil's Advocate's escalation, with no synthesis round; its receipt alone is the consensus. The full profile
+accepts only the three roles, the lite one only the reviewer.
 With `metric: answer-key` the panel is a review: its consensus allows UNSHIPPED only on a veto (a hard defect a
 receipt cites), and check_gate.py decides the rest from the gate and the Phase 4 metric (verdict-rules.json
 metric_first).
@@ -30,7 +33,9 @@ ROUNDS_DIR = PANEL_DIR / "rounds"
 RULES_PATH = Path(__file__).resolve().parent.parent / "references" / "verdict-rules.json"
 DA = "devils-advocate"
 ROLES = ("verifier-a", "verifier-b", DA)
-ALL_ROLES = ROLES
+REVIEWER = "reviewer"  # the lite profile's one-member panel: quality, utility and adversary in one role
+LITE_ROLES = (REVIEWER,)
+ALL_ROLES = ROLES + LITE_ROLES
 RANK = {"UNSHIPPED": 0, "SHIP WITH CAVEATS": 1, "SHIP": 2}
 METRICS = {"answer-key": True, "llm-judge": False}  # rubric.yaml `metric:` -> checkable outputs (metric-first)
 QUOTED = re.compile(r'"([^"]+)"|\u201c([^\u201d]+)\u201d')  # "…" or “…”
@@ -136,9 +141,26 @@ def checkable(workspace: Path) -> bool:
         return False
 
 
+def lite(workspace: Path) -> bool:
+    return profile(workspace) == "lite"
+
+
+def roles(workspace: Path) -> tuple[str, ...]:
+    """The panel's roles for this build: the reviewer alone under the lite profile, else the three members."""
+    return LITE_ROLES if lite(workspace) else ROLES
+
+
+def adversary(workspace: Path) -> str:
+    """The role that holds the Devil's Advocate's escalation."""
+    return REVIEWER if lite(workspace) else DA
+
+
 def max_rounds(workspace: Path) -> int:
-    """max_panel_rounds for this build: metric_first's when its outputs are checkable, else the panel path's."""
-    return metric_first()["max_panel_rounds"] if checkable(workspace) else rules()["max_panel_rounds"]
+    """max_panel_rounds for this build: metric_first's when its outputs are checkable, else the panel path's (the
+    lite profile's on the lite panel: one ITERATE)."""
+    if checkable(workspace):
+        return metric_first()["max_panel_rounds"]
+    return lite_rules()["max_panel_rounds"] if lite(workspace) else rules()["max_panel_rounds"]
 
 
 def _receipt_path(workspace: Path, role: str, synthesis: bool) -> Path:
@@ -229,7 +251,7 @@ def _synthesis_scores(raw: dict, first: dict, disputed: list[str], rubric: Rubri
     return out
 
 
-def _veto(raw: object, role: str, escalate: object, texts: list[str]) -> dict | None:
+def _veto(raw: object, role: str, escalate: object, texts: list[str], escalator: str = DA) -> dict | None:
     """A receipt's `veto` (null, or {kind, evidence, repro}): a hard defect that forces UNSHIPPED on a checkable
     skill. Its evidence quote is verified like a score's; `repro` is the input or command that shows the failure."""
     if raw is None:
@@ -241,8 +263,9 @@ def _veto(raw: object, role: str, escalate: object, texts: list[str]) -> dict | 
     if not (isinstance(evidence, str) and evidence.strip()) or not (isinstance(repro, str) and repro.strip()):
         raise GateError(f"a {raw['kind']} veto needs `evidence` (a verbatim quote) and `repro` (the input or command "
                         "that reproduces the failure)")
-    if raw["kind"] == "escalate" and (role != DA or not (isinstance(escalate, str) and escalate.strip())):
-        raise GateError("an escalate veto is the Devil's Advocate's, beside its `escalation`")
+    if raw["kind"] == "escalate" and (role != escalator or not (isinstance(escalate, str) and escalate.strip())):
+        holder = "reviewer's" if escalator == REVIEWER else "Devil's Advocate's"
+        raise GateError(f"an escalate veto is the {holder}, beside its `escalation`")
     _verify_quote("veto", evidence, texts)
     return {"kind": raw["kind"], "evidence": evidence, "repro": repro}
 
@@ -250,8 +273,14 @@ def _veto(raw: object, role: str, escalate: object, texts: list[str]) -> dict | 
 def write_receipt(workspace: Path, role: str, source: Path, skill: str, skill_sha: str,
                   synthesis: bool = False) -> Path:
     """Validate a verifier's scoring JSON against the rubric and write its role receipt."""
-    if role not in ROLES:
-        raise GateError(f"role {role!r} is not one of {', '.join(ROLES)}")
+    allowed = roles(workspace)
+    if role not in allowed:
+        other = ("; it is the lite profile's one-member panel" if role in LITE_ROLES else
+                 "; it is a member of the full profile's panel" if role in ROLES else "")
+        raise GateError(f"role {role!r} is not one of {', '.join(allowed)} (this build's {profile(workspace)} "
+                        f"profile panel{other})")
+    if synthesis and lite(workspace):
+        raise GateError("the lite profile's panel has no synthesis round: the reviewer's first receipt is final")
     if not synthesis:
         check_round(workspace, skill_sha)
     rubric, texts = read_rubric(workspace), quotable(workspace, skill)
@@ -262,20 +291,20 @@ def write_receipt(workspace: Path, role: str, source: Path, skill: str, skill_sh
                "round": 2 if synthesis else 1}
     if synthesis:
         current = current_receipts(workspace, skill_sha, rubric.sha256)
-        if missing := [r for r in ROLES if r not in current]:
+        if missing := [r for r in allowed if r not in current]:
             raise GateError(f"a synthesis receipt needs every first-round receipt for this skill; missing {missing}")
         if not (disputed := disputes(current, rubric)):
             raise GateError("the first round disputed nothing; there is no synthesis round")
         receipt["scores"] = _synthesis_scores(raw, current[role], disputed, rubric, texts)
         recommendation = raw.get("final_recommendation") or current[role]["recommendation"]
         escalate = current[role].get("escalate") if "escalation" not in raw else raw.get("escalation")
-        veto = _veto(raw["veto"], role, escalate, texts) if "veto" in raw else current[role].get("veto")
+        veto = _veto(raw["veto"], role, escalate, texts, adversary(workspace)) if "veto" in raw else current[role].get("veto")
         if veto and veto["kind"] == "escalate" and not (isinstance(escalate, str) and escalate.strip()):
             veto = None  # the escalation it rested on is withdrawn
     else:
         receipt["scores"] = _scores(raw.get("scores"), rubric, texts)
         recommendation, escalate = raw.get("pass_recommendation"), raw.get("escalation")
-        veto = _veto(raw.get("veto"), role, escalate, texts)
+        veto = _veto(raw.get("veto"), role, escalate, texts, adversary(workspace))
     receipt["recommendation"] = (re.sub(r"[ _]+", " ", recommendation.strip().upper())
                                  if isinstance(recommendation, str) and recommendation.strip() else None)
     receipt["escalate"] = escalate if isinstance(escalate, str) and escalate.strip() else None
@@ -292,7 +321,8 @@ def write_receipt(workspace: Path, role: str, source: Path, skill: str, skill_sh
 
 
 def current_receipts(workspace: Path, skill_sha: str, rubric_sha: str, synthesis: bool = False) -> dict[str, dict]:
-    found = {role: read_json(_receipt_path(workspace, role, synthesis)) for role in ROLES}
+    """The receipts of this build's panel roles (roles) bound to this skill and rubric."""
+    found = {role: read_json(_receipt_path(workspace, role, synthesis)) for role in roles(workspace)}
     return {role: data for role, data in found.items()
             if data and data.get("skill_sha256") == skill_sha and data.get("rubric_sha256") == rubric_sha}
 
@@ -411,32 +441,32 @@ def _resolve(scores: list[float], within: float) -> tuple[float | None, str]:
 def compute(workspace: Path, skill: str, skill_sha: str) -> Consensus:
     """The consensus of the three current receipts; raises GateError naming what is missing, including a
     synthesis round the first round calls for, and RoundsExhausted past `max_panel_rounds`."""
-    rubric, r = read_rubric(workspace), rules()
+    rubric, r, members = read_rubric(workspace), rules(), roles(workspace)
     panel_n = check_round(workspace, skill_sha)
     first = current_receipts(workspace, skill_sha, rubric.sha256)
-    if missing := [role for role in ROLES if role not in first]:
+    if missing := [role for role in members if role not in first]:
         raise GateError(f"no current role receipt from {', '.join(missing)} for this skill and rubric: each "
                         "verifier runs `check_gate.py --panel-receipt <role> <scores.json>` after scoring (5.2)")
-    disputed, final = disputes(first, rubric), first
+    disputed, final = ([] if lite(workspace) else disputes(first, rubric)), first
     if disputed:
         final = current_receipts(workspace, skill_sha, rubric.sha256, synthesis=True)
-        if waiting := [role for role in ROLES if role not in final]:
+        if waiting := [role for role in members if role not in final]:
             raise GateError(f"SYNTHESIS NEEDED on {', '.join(disputed)}: run one synthesis round (5.3); "
                             f"{', '.join(waiting)} still to submit `--panel-receipt <role> <file> --synthesis`")
     result = Consensus(label="", allowed="", overall=None, target=rubric.target_score, disputed=disputed,
                        rounds=2 if disputed else 1, panel_round=panel_n, max_panel_rounds=max_rounds(workspace),
                        checkable=rubric.checkable)
     for d in rubric.dimensions:
-        scores = [final[role]["scores"][d.name]["score"] for role in ROLES]
+        scores = [final[role]["scores"][d.name]["score"] for role in members]
         value, how = _resolve(scores, r["agree_within"])
         result.dimensions[d.name] = None if value is None else round(value, 4)
         if how == "deadlock":
             result.deadlocked.append(d.name)
         elif how == "majority":
-            result.dissent[d.name] = ", ".join(f"{role} {s:g}" for role, s in zip(ROLES, scores))
-        if sum(1 for s in scores if s < r["block_below"]) >= r["block_majority"]:
+            result.dissent[d.name] = ", ".join(f"{role} {s:g}" for role, s in zip(members, scores))
+        if sum(1 for s in scores if s < r["block_below"]) >= min(r["block_majority"], len(members)):
             result.blocked.append(d.name)
-    result.escalate = final[DA].get("escalate")
+    result.escalate = final[adversary(workspace)].get("escalate")
     if not result.deadlocked:
         result.overall = round(_overall(result.dimensions, rubric), 4)
     if result.deadlocked or result.escalate:
@@ -451,14 +481,14 @@ def compute(workspace: Path, skill: str, skill_sha: str) -> Consensus:
         result.label = "ITERATE"
     result.allowed = r["allowed_terminal"][result.label]
     if rubric.checkable:  # a review: only a cited hard defect caps the verdict; check_gate.ship_rule decides the rest
-        result.vetoes = [f"{role} {final[role]['veto']['kind']}" for role in ROLES if final[role].get("veto")]
+        result.vetoes = [f"{role} {final[role]['veto']['kind']}" for role in members if final[role].get("veto")]
         result.allowed = "UNSHIPPED" if result.vetoes else "SHIP"
     return result
 
 
 def _receipts_digest(workspace: Path) -> str:
     digest = hashlib.sha256()
-    for role in ROLES:
+    for role in ALL_ROLES:
         for synthesis in (False, True):
             digest.update(f"{role}{synthesis}".encode() + (file_sha256(_receipt_path(workspace, role, synthesis))
                                                            or "-").encode())

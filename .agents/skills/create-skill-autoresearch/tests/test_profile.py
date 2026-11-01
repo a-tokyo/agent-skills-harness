@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -155,6 +156,112 @@ class LiteRescoreTest(test_metric_first.MetricFirstFixture):
         self.assertIn("RESCORE REFUSED", self.run_script("rescore.py", CSA_PROFILE="lite").stdout)
         self.edit_skill("Fixed again.")
         self.assertIn("RESCORED", self.run_script("rescore.py", CSA_PROFILE="lite").stdout, "a new commit scores")
+
+
+class LitePanelTest(TempWorkspace):
+    """The lite panel: one `reviewer` (references/panel/reviewer.md), no synthesis round; its receipt is the consensus.
+    The full profile accepts only its three roles, the lite one only the reviewer."""
+
+    LOW = (5, 6)  # an ITERATE on the panel path
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.make_build(["gold-01", "trigger-1"])
+        self.write_rubric()
+        (self.ws / "work" / "manifest.yaml").write_text("profile: lite\n")
+
+    def script(self, *args: str) -> subprocess.CompletedProcess:
+        return self.run_script(*args, CSA_PROFILE="")
+
+    def gate(self) -> None:
+        out = self.script("gate.py", "--model", "m")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+
+    def review(self, scores: tuple[float, float], escalation: str | None = None, veto: dict | None = None,
+               role: str = "reviewer", synthesis: bool = False) -> subprocess.CompletedProcess:
+        def dim(score: float) -> dict:
+            return {"score": score, "confidence": 0.9, "evidence": '"name: demo"'}
+        path = self.root / f"{role}.json"
+        path.write_text(json.dumps({"scores": {"correctness": dim(scores[0]), "clarity": dim(scores[1])},
+                                    "pass_recommendation": "SHIP", "escalation": escalation, "veto": veto}))
+        return self.script("check_gate.py", "--panel-receipt", role, str(path), *(["--synthesis"] if synthesis else []))
+
+    def edit(self, n: int) -> None:
+        (self.ws / "output" / "demo" / "SKILL.md").write_text(f"---\nname: demo\ndescription: Demo.\n---\n# Demo\n\nFix {n}.\n")
+
+    def test_one_reviewer_is_the_whole_panel(self) -> None:
+        self.gate()
+        self.assertEqual(self.review((9, 9)).returncode, 0)
+        out = self.script("check_gate.py", "--consensus")
+        self.assertEqual(out.returncode, 0, out.stdout)
+        self.assertIn("PANEL CONSENSUS: SHIP (allows SHIP); overall=0.900", out.stdout)
+        consensus = json.loads((self.ws / "work" / "experiments" / "panel" / "consensus.json").read_text())
+        self.assertEqual((consensus["rounds"], consensus["disputed"]), (1, []))
+
+    def test_each_profile_accepts_only_its_own_panel(self) -> None:
+        self.gate()
+        out = self.review((9, 9), role="verifier-a")
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("is not one of reviewer (this build's lite profile panel; it is a member of the full", out.stdout)
+        (self.ws / "work" / "manifest.yaml").write_text("profile: full\n")
+        self.gate()
+        out = self.review((9, 9))
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("is not one of verifier-a, verifier-b, devils-advocate (this build's full profile panel; it is "
+                      "the lite profile's one-member panel)", out.stdout)
+
+    def test_no_synthesis_and_one_low_score_blocks(self) -> None:
+        self.gate()
+        self.assertEqual(self.review((2, 9)).returncode, 0)
+        out = self.review((2, 9), synthesis=True)
+        self.assertIn("no synthesis round", out.stdout)
+        self.assertIn("PANEL CONSENSUS: BLOCK (allows UNSHIPPED)", self.script("check_gate.py", "--consensus").stdout)
+
+    def test_the_reviewer_holds_the_escalation(self) -> None:
+        self.gate()
+        self.assertEqual(self.review((9, 9), escalation="ESCALATE: writes outside the workspace").returncode, 0)
+        self.assertIn("PANEL CONSENSUS: ESCALATE", self.script("check_gate.py", "--consensus").stdout)
+        rubric = self.ws / "work" / "evaluation" / "rubric.yaml"
+        rubric.write_text(rubric.read_text() + "metric: answer-key\n")
+        self.gate()
+        veto = {"kind": "escalate", "evidence": '"name: demo"', "repro": "run it on input/gold-01.md"}
+        out = self.review((9, 9), escalation="ESCALATE: unsafe", veto=veto)
+        self.assertEqual(out.returncode, 0, out.stdout)
+        self.assertIn("veto: reviewer escalate", self.script("check_gate.py", "--consensus").stdout)
+
+    def test_the_panel_path_allows_one_iterate_then_ends(self) -> None:
+        self.gate()
+        self.assertEqual(self.review(self.LOW).returncode, 0)
+        self.assertIn("PANEL CONSENSUS: ITERATE", self.script("check_gate.py", "--consensus").stdout)
+        self.edit(1)
+        self.gate()  # the panel-verdict path re-gates after an ITERATE
+        self.assertEqual(self.review(self.LOW).returncode, 0)
+        out = self.script("check_gate.py", "--consensus").stdout
+        self.assertIn("PANEL CONSENSUS: ITERATE", out)
+        record = json.loads((self.ws / "work" / "experiments" / "panel" / "consensus.json").read_text())
+        self.assertEqual((record["panel_round"], record["max_panel_rounds"]), (2, 2))
+        self.edit(2)
+        self.gate()
+        out = self.review((9, 9))
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("PANEL ROUNDS EXHAUSTED: the panel ran its 2 rounds", out.stdout)
+
+
+class LiteNextTest(test_metric_first.MetricFirstFixture):
+    """--next tells a lite build to dispatch one reviewer, never the three members."""
+
+    def test_next_dispatches_one_reviewer(self) -> None:
+        path = self.ws / "work" / "evaluation" / "evaluate.sh"
+        path.write_text(test_rescore.EVALUATE)
+        path.chmod(0o755)
+        self.log(0.95)
+        (self.ws / "work" / "manifest.yaml").write_text("profile: lite\n")
+        self.assertEqual(self.run_script("gate.py", "--model", "m", CSA_PROFILE="").returncode, 0)
+        out = self.run_script("check_gate.py", "--next", CSA_PROFILE="").stdout
+        self.assertIn("dispatch ONE reviewer subagent, role `reviewer`", out)
+        self.assertIn(str(SKILL / "references" / "panel" / "reviewer.md"), out)
+        self.assertIn("--panel-receipt reviewer", out)
+        self.assertNotIn("verifier-a", out)
 
 
 class LiteRulesTest(unittest.TestCase):

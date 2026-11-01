@@ -333,7 +333,7 @@ def finish(workspace: Path, skill: str | None = None) -> tuple[bool, str | None,
                                 f"{GATE_ATTEMPTS}; run 3.6 and 5.0 (a build that does not ship still runs the gate)")
     last = panel.exhausted(workspace)
     if last and unshipped and _spaced(last.get("line") or "") not in _spaced(text):
-        return False, verdict, (f"the panel ran its {panel.rules()['max_panel_rounds']} rounds; {BENCHMARK} lacks the "
+        return False, verdict, (f"the panel ran its {panel.max_rounds(workspace)} rounds; {BENCHMARK} lacks the "
                                 f"last round's PANEL CONSENSUS line beside UNSHIPPED; copy it in verbatim: "
                                 f"{last.get('line')}")
     gate = validate(workspace, skill)
@@ -864,7 +864,7 @@ def next_action(workspace: Path, skill: str | None = None) -> Next:
             rubric = panel.read_rubric(workspace)
             round_n = panel.check_round(workspace, skill_sha)
             have = panel.current_receipts(workspace, skill_sha, rubric.sha256)
-            if len(have) == len(panel.ROLES):
+            if len(have) == len(panel.roles(workspace)):
                 consensus = panel.write_consensus(workspace, name, skill_sha)
         except panel.RoundsExhausted as exc:
             return _verdict(workspace, "UNSHIPPED", [], str(exc), unfinished, False)
@@ -873,11 +873,19 @@ def next_action(workspace: Path, skill: str | None = None) -> Next:
         if consensus is None:
             receipt = _self(workspace, "--panel-receipt", "<role>", "<scores.json>")
             if have:
-                missing = ", ".join(r for r in panel.ROLES if r not in have)
+                missing = ", ".join(r for r in panel.roles(workspace) if r not in have)
                 return Next("panel", f"5.2 panel round {round_n}: still to score: {missing}. Dispatch them (SKILL.md "
                                      "5.2); each ends with:", [receipt, f"then: {_self(workspace, '--next')}"])
             premortem = "" if (workspace / "work" / "experiments" / "premortem.md").is_file() else \
                 "5.1 premortem to work/experiments/premortem.md, then "
+            if panel.lite(workspace):
+                role_file = SCRIPTS.parent / "references" / "panel" / "reviewer.md"
+                return Next("panel", f"{premortem}5.2 panel round {round_n} (lite profile): dispatch ONE reviewer "
+                                     "subagent, role `reviewer`, in the foreground, with the inputs SKILL.md 5.2 "
+                                     f"gives a member; tell it to read only {role_file} and member-rules.md beside "
+                                     "it. No other member, no synthesis round. It ends with:",
+                            [_self(workspace, "--panel-receipt", "reviewer", "<scores.json>"),
+                             f"then: {_self(workspace, '--next')}"], before=[gate.line()])
             return Next("panel", f"{premortem}5.2 panel round {round_n}: dispatch verifier-a, verifier-b and "
                                  "devils-advocate in one message (SKILL.md 5.2); each ends with:",
                         [receipt, f"then: {_self(workspace, '--next')}"], before=[gate.line()])
@@ -905,7 +913,8 @@ def main(argv: list[str] | None = None) -> int:
     step = parser.add_mutually_exclusive_group()
     step.add_argument("--panel", action="store_true", help="5.2: validate the gate before the panel starts")
     step.add_argument("--panel-receipt", nargs=2, metavar=("ROLE", "SCORES_JSON"),
-                      help=f"5.2: a verifier's role receipt after it scores ({', '.join(panel.ROLES)})")
+                      help=f"5.2: a verifier's role receipt after it scores ({', '.join(panel.ROLES)}; the "
+                           f"lite profile: {', '.join(panel.LITE_ROLES)})")
     step.add_argument("--consensus", action="store_true", help="5.3: the panel's verdict from the three receipts")
     step.add_argument("--finish", action="store_true", help="the build's end state instead of the gate")
     step.add_argument("--fast-path", action="store_true", help="3.5: may the build skip the Phase 4 loop")
@@ -981,7 +990,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.panel:
             print(f"PANEL ROUND {panel.check_round(workspace, skill_sha)}: each role scores every dimension")
             print(f"panel: after scoring, each verifier runs `check_gate.py --panel-receipt <role> <scores.json>` "
-                  f"({', '.join(panel.ROLES)}); then `check_gate.py --consensus` (5.3)", file=sys.stderr)
+                  f"({', '.join(panel.roles(workspace))}); then `check_gate.py --consensus` (5.3)", file=sys.stderr)
     except panel.RoundsExhausted as exc:
         print(f"PANEL ROUNDS EXHAUSTED: {exc}")
         return 1

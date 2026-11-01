@@ -47,7 +47,7 @@ named below serves one branch: read it only when that branch applies.
 | `claude plugin eval` | 3.6 suite, 5.0 gate | the manual protocol (5.0) |
 
 Read [references/standalone-fallback.md](references/standalone-fallback.md) only when skill-creator or writing-for-agents is missing.
-Install skills with `npx skills add <source> --skill <name> -a <claude-code|cursor|codex|opencode>`; on Windows, run inside WSL.
+Install skills with `npx skills add <source> --skill <name> -a <claude-code|cursor|codex|opencode>` (Windows: inside WSL).
 Read [references/hosts.md](references/hosts.md) only when the host is not Claude Code, its hooks need installing, or a panel role runs on another host's CLI.
 
 Hooks (`hooks/`) back these rules in a build (kill, loop, poll, subagent and finish guards); a denial names what to
@@ -112,7 +112,7 @@ and no gate is live (3.6 and 5.0 run even for `UNSHIPPED`).
 ### 5.2 Panel Evaluation
 
 `--next` validates the gate and names the panel round. Then spawn 3 verifier subagents **in parallel** (one
-message), one agent per role. Each gets ONLY the skill's SKILL.md (a reference only when it asks for one by name),
+message), one agent per role (lite: one `reviewer`, as `--next` prints). Each gets ONLY the skill's SKILL.md (a reference only when it asks for one by name),
 the gold standards, the rubric and the premortem risks: never research notes, `autoresearch.jsonl` or builder context. The roles (`<role>`): Verifier-A, quality (`verifier-a`); Verifier-B, utility (`verifier-b`);
 Devil's Advocate, adversarial, always tries to smuggle an instruction in through content the skill fetches
 (`devils-advocate`). Each member's prompt gives its role, the input paths, the
