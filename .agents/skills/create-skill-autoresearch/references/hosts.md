@@ -124,7 +124,7 @@ skill's directory: the skill being built, the task materials and `work/` always 
 
 | Host | Ships as | Duplicate check | Status |
 |---|---|---|---|
-| Claude Code | `hooks/hooks.json` `PreToolUse`, matcher `Read` (exit 2, reason on stderr); shell reads via the kill guard | the event's `transcript_path`; a subagent (`agent_id`) against its own `subagents/agent-<id>.jsonl` | contract and transcript shape from this host's own session files (2026-11-01), offline-tested; unverified live |
+| Claude Code | `hooks/hooks.json` `PreToolUse`, matcher `Read` (exit 2, reason on stderr); shell reads via the kill guard | the event's `transcript_path`; a subagent (`agent_id`) against its own `subagents/agent-<id>.jsonl` | verified live (`claude -p --plugin-dir`, 2026-11-01: denied `scripts/check_gate.py` and a second `phase-5.md` read, allowed the first and `work/`); subagents offline-tested |
 | Cursor | `hooks/cursor-hooks.json` `beforeReadFile` (`{"permission": "deny", ...}`); shell reads via `beforeShellExecution` | none: no transcript in the event, so reference reads are allowed | contract from the hooks doc, offline-tested; unverified live |
 | Codex | the kill guard's `PreToolUse` script sees shell reads only | when the event carries `transcript_path` in Claude's format | contract tested offline; untested in Codex |
 | OpenCode | `hooks/opencode-kill-guard.js` on `read` and `bash` | none: no transcript | plugin tested with node; untested in OpenCode |
