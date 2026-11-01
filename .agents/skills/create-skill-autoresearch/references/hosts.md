@@ -76,6 +76,11 @@ shrank `--wait-timeout` to fit it, and polled (26 exit-124 calls over 30 builds)
 | Cursor, Codex, OpenCode | give the shell call its longest timeout and `--wait-timeout` 30 s under it; re-issue the same command on 124 | untested; their shell limits are not recorded here |
 
 `check_gate.py --next` prints the command with this note, and a still-running exit repeats it in one line.
+`rescore.py` and `run_owned.py start <name> --wait` block and re-attach the same way (owned jobs `rescore` and
+`<name>`). On Claude Code the kill guard's PreToolUse hook gives every call to this factory's scripts or a build's
+`work/evaluation/*.sh` `timeout` 600000 and `run_in_background` false itself, through `updatedInput` (verified
+against the 2.1.x source: the hook's object replaces the tool input, so it echoes the other fields); a host that
+ignores `updatedInput` keeps the call's own timeout, and the scripts' exit 124 line says to issue the command again.
 
 ## Kill guard
 

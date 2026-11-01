@@ -20,6 +20,14 @@ executor session (CSA_EXECUTOR set) or one whose evaluate.sh path it cannot reso
 
 The read guard's shell half rides on it too (hooks/read_guard.py): a `cat`, `sed`, `head`, ... of this skill's
 script or hook source, or a second whole read of a factory reference in one context, is denied.
+
+Long commands block (Claude Code): a call it lets through that runs this factory's scripts (gate.py, rescore.py,
+run_owned.py, check_gate.py) or a build's work/evaluation/*.sh gets `timeout` 600000 and `run_in_background` false
+through `hookSpecificOutput.updatedInput` (exit 0, no permission decision), so the scripts' 570 s waits finish
+inside one call instead of the call moving to the background after the 120 s default. Claude Code replaces the
+whole tool input with updatedInput (toolExecution.ts `processedInput = result.updatedInput`, checked against the
+2.1.x source and the 2.1.316 build), so the hook echoes every other field unchanged. A host that ignores it keeps
+the call's own timeout; the scripts then exit 124 with "issue the same command again", which re-attaches.
 """
 
 from __future__ import annotations
@@ -53,6 +61,10 @@ EVALUATE = re.compile(r"(?:[^\s;&|()`<>=]*/)?evaluate\.sh(?![\w.-])")
 RUNNER = re.compile(r"(?:(?:\w+=\S*|sudo|command|exec|env|nice|nohup|time|timeout|bash|sh|zsh|-\S+|\d+[smhd]?)\s+)*")
 REDIRECT = re.compile(r"\d*(?:>>?|<<-?|<)&?\s*(?:\d+\b|[^\s;&|)]+)?")
 CD = re.compile(r"(?:^|[;&|(\n])\s*cd\s+(\S+)")
+# This factory's scripts and a build's evaluation scripts: the calls that may wait up to 570 s.
+LONG = re.compile(r"(?:^|[\s/;&|(`=])(?:gate|rescore|run_owned|check_gate)\.py(?![\w.-])"
+                  r"|(?:work/evaluation/[\w.-]+|(?:^|[\s/;&|(`=])(?:evaluate|evaluate-checks|run-case))\.sh(?![\w.-])")
+BLOCKING_MS = 600000  # Claude Code's longest Bash timeout (BASH_MAX_TIMEOUT_MS default)
 LOOP_MESSAGE = ("Blocked by create-skill-autoresearch's loop guard: Phase 4 is done ({reason}); go to 5.0 (3.6 and "
                 "4.6 first where they apply). `check_gate.py --loop` shows this; `evaluate.sh <case>` still runs.")
 
@@ -201,6 +213,16 @@ def check(command: object, cwd: str | None, event: dict | None = None) -> str | 
     return loop_block(command, cwd) or read_block(command, cwd, event)
 
 
+def blocking_input(tool_input: dict, command: str, cwd: str | None) -> dict | None:
+    """The Bash input with timeout 600000 and run_in_background false when the call runs a long factory command
+    in a build (not an executor session), else None."""
+    if os.environ.get("CSA_EXECUTOR") or not LONG.search(normalise(command)) or not guarded(cwd):
+        return None
+    if tool_input.get("timeout") == BLOCKING_MS and tool_input.get("run_in_background") is False:
+        return None
+    return {**tool_input, "timeout": BLOCKING_MS, "run_in_background": False}
+
+
 def main() -> int:
     try:
         event = json.load(sys.stdin)
@@ -217,13 +239,22 @@ def main() -> int:
         reply = {"permission": "deny", "user_message": reason, "agent_message": reason} if reason else ALLOW
         print(json.dumps(reply))
         return 0
-    command = (event.get("tool_input") or {}).get("command")
+    tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
+    command = tool_input.get("command")
     if not isinstance(command, str):
         return 0
-    reason = check(command, event.get("cwd") if isinstance(event.get("cwd"), str) else None, event)
+    cwd = event.get("cwd") if isinstance(event.get("cwd"), str) else None
+    reason = check(command, cwd, event)
     if reason:
         print(reason, file=sys.stderr)
         return 2
+    try:
+        updated = blocking_input(tool_input, command, cwd) if event.get("tool_name", "Bash") == "Bash" else None
+    except Exception as exc:  # noqa: BLE001  (never stop a call on the rewrite's own failure)
+        print(f"kill guard: {type(exc).__name__}: {exc}; input unchanged", file=sys.stderr)
+        updated = None
+    if updated is not None:
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": updated}}))
     return 0
 
 
