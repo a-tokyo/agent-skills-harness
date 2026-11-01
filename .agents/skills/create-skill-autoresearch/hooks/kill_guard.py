@@ -21,6 +21,12 @@ executor session (CSA_EXECUTOR set) or one whose evaluate.sh path it cannot reso
 The read guard's shell half rides on it too (hooks/read_guard.py): a `cat`, `sed`, `head`, ... of this skill's
 script or hook source, or a second whole read of a factory reference in one context, is denied.
 
+The poll guard rides on it too: while a job the build owns runs (a run_owned.py record in work/pids/: `gate`,
+`rescore`, an evaluate run), a Bash sleep or poll loop (`sleep N`, `until ...; do`, `while ...; do ... sleep`,
+`while kill -0`) and Claude Code's Monitor tool are denied in the build's main session, with the exact command
+that blocks on that job instead (each poll re-reads the whole context). Otherwise, and in an executor session or a
+subagent, they run.
+
 Long commands block (Claude Code): a call it lets through that runs this factory's scripts (gate.py, rescore.py,
 run_owned.py, check_gate.py) or a build's work/evaluation/*.sh gets `timeout` 600000 and `run_in_background` false
 through `hookSpecificOutput.updatedInput` (exit 0, no permission decision), so the scripts' 570 s waits finish
@@ -35,7 +41,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import sys
+from pathlib import Path
 
 if os.name == "nt":  # the host gets its "allow" answer, so no shell call or turn is held
     print("kill guard: native Windows is not supported; run the factory inside WSL", file=sys.stderr)
@@ -61,6 +69,12 @@ EVALUATE = re.compile(r"(?:[^\s;&|()`<>=]*/)?evaluate\.sh(?![\w.-])")
 RUNNER = re.compile(r"(?:(?:\w+=\S*|sudo|command|exec|env|nice|nohup|time|timeout|bash|sh|zsh|-\S+|\d+[smhd]?)\s+)*")
 REDIRECT = re.compile(r"\d*(?:>>?|<<-?|<)&?\s*(?:\d+\b|[^\s;&|)]+)?")
 CD = re.compile(r"(?:^|[;&|(\n])\s*cd\s+(\S+)")
+POLLS = [re.compile(r"(?<![\w-])sleep\s+\d"), re.compile(r"\bwhile\s+kill\s+-0\b"),
+         re.compile(r"\buntil\b.*?\bdo\b", re.S), re.compile(r"\bwhile\b.*?\bdo\b.*?\bsleep\b", re.S)]
+POLL_MESSAGE = ("Blocked by create-skill-autoresearch's poll guard: the build's `{name}` job is running ({ws}). "
+                "Polling re-reads your whole context on every call; block on the job instead, in one foreground "
+                "Bash call with timeout 600000:\n  {command}\nOn exit 124 (still running) issue that same command "
+                "again.")
 # This factory's scripts and a build's evaluation scripts: the calls that may wait up to 570 s.
 LONG = re.compile(r"(?:^|[\s/;&|(`=])(?:gate|rescore|run_owned|check_gate)\.py(?![\w.-])"
                   r"|(?:work/evaluation/[\w.-]+|(?:^|[\s/;&|(`=])(?:evaluate|evaluate-checks|run-case))\.sh(?![\w.-])")
@@ -164,7 +178,6 @@ def loop_block(command: str, cwd: str | None) -> str | None:
             return None
         sys.dont_write_bytecode = True
         sys.path.insert(0, SCRIPTS)
-        from pathlib import Path
         import check_gate  # noqa: E402  (the skill's own scripts, beside this hook)
 
         for ws in workspaces:
@@ -176,18 +189,62 @@ def loop_block(command: str, cwd: str | None) -> str | None:
     return None
 
 
+def workspaces(cwd: str | None) -> list[str]:
+    """The factory builds at `cwd` (else this process's directory) or directly under its builds/."""
+    root = cwd or os.getcwd()
+    builds = os.path.join(root, "builds")
+    candidates = [root, *(os.path.join(builds, n) for n in (sorted(os.listdir(builds)) if os.path.isdir(builds) else []))]
+    return [ws for ws in candidates if os.path.isfile(os.path.join(ws, "work", "manifest.yaml"))
+            or os.path.isdir(os.path.join(ws, "work", "evaluation"))]
+
+
 def guarded(cwd: str | None) -> bool:
     """An executor session, or a factory build at `cwd` (else this process's directory) or under its builds/."""
     if os.environ.get("CSA_EXECUTOR"):
         return True
     try:
-        root = cwd or os.getcwd()
-        builds = os.path.join(root, "builds")
-        candidates = [root, *(os.path.join(builds, n) for n in (os.listdir(builds) if os.path.isdir(builds) else []))]
-        return any(os.path.isfile(os.path.join(ws, "work", "manifest.yaml"))
-                   or os.path.isdir(os.path.join(ws, "work", "evaluation")) for ws in candidates)
+        return bool(workspaces(cwd))
     except OSError:
         return False
+
+
+def running_job(cwd: str | None) -> tuple[str, str, str] | None:
+    """(workspace, job name, the command that blocks on it) for the first owned job running in a build here; the
+    gate's own eval runs (gate-*) are covered by `gate`."""
+    sys.dont_write_bytecode = True
+    sys.path.insert(0, SCRIPTS)
+    import run_owned  # noqa: E402  (the skill's own scripts, beside this hook)
+
+    for ws in workspaces(cwd):
+        sdir = os.path.join(ws, "work", "pids")
+        names = sorted(n[:-5] for n in (os.listdir(sdir) if os.path.isdir(sdir) else []) if n.endswith(".json"))
+        for name in (n for n in names if not n.startswith("gate-")):
+            try:
+                if run_owned.status(Path(sdir), name)["state"] != "running":
+                    continue
+            except run_owned.OwnedError:
+                continue
+            q, script = shlex.quote, (lambda s: q(os.path.join(SCRIPTS, s)))
+            command = {"gate": f"python3 {script('gate.py')} --workspace {q(ws)} --wait",
+                       "rescore": f"python3 {script('rescore.py')} --workspace {q(ws)}"}.get(
+                name, f"python3 {script('run_owned.py')} --workspace {q(ws)} wait {q(name)}")
+            return ws, name, command
+    return None
+
+
+def poll_block(command: str | None, cwd: str | None, event: dict | None) -> str | None:
+    """The poll guard's deny message for a sleep or poll loop (command) or a Monitor call (None) while a build job
+    runs, or None; never in an executor session or a subagent. Any error of its own allows the call."""
+    if os.environ.get("CSA_EXECUTOR") or (event or {}).get("agent_id"):
+        return None
+    if command is not None and not any(p.search(normalise(command)) for p in POLLS):
+        return None
+    try:
+        job = running_job(cwd)
+    except Exception as exc:  # noqa: BLE001
+        print(f"poll guard: {type(exc).__name__}: {exc}; call allowed", file=sys.stderr)
+        return None
+    return None if job is None else POLL_MESSAGE.format(ws=job[0], name=job[1], command=job[2])
 
 
 def read_block(command: str, cwd: str | None, event: dict | None) -> str | None:
@@ -210,7 +267,7 @@ def check(command: object, cwd: str | None, event: dict | None = None) -> str | 
         return None
     if is_pattern_kill(command):
         return MESSAGE
-    return loop_block(command, cwd) or read_block(command, cwd, event)
+    return loop_block(command, cwd) or poll_block(command, cwd, event) or read_block(command, cwd, event)
 
 
 def blocking_input(tool_input: dict, command: str, cwd: str | None) -> dict | None:
@@ -240,6 +297,13 @@ def main() -> int:
         print(json.dumps(reply))
         return 0
     tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
+    if event.get("tool_name") == "Monitor":
+        cwd = event.get("cwd") if isinstance(event.get("cwd"), str) else None
+        reason = poll_block(None, cwd, event) if guarded(cwd) else None
+        if reason:
+            print(reason, file=sys.stderr)
+            return 2
+        return 0
     command = tool_input.get("command")
     if not isinstance(command, str):
         return 0

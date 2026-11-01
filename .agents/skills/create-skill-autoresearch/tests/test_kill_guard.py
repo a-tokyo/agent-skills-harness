@@ -296,6 +296,72 @@ class BlockingTest(unittest.TestCase):
         self.assertEqual(json.loads(run_hook(cursor(self.LONG[0])).stdout), {"permission": "allow"})
 
 
+class PollGuardTest(unittest.TestCase):
+    """While a job the build owns runs, sleep/poll loops and Monitor are denied with the command that blocks on it."""
+
+    POLLS = ["sleep 30", "sleep 5 && tail -3 work/pids/gate.log", "until [ -f done ]; do sleep 10; done",
+             "while kill -0 4242; do :; done", "while true; do cat x; sleep 1; done",
+             "for i in 1 2 3; do sleep 60; python3 scripts/gate.py --wait; done"]
+
+    def setUp(self) -> None:
+        self.ws = Path(tempfile.mkdtemp(prefix="csa-poll-guard-"))
+        self.addCleanup(shutil.rmtree, self.ws, True)
+        (self.ws / "work" / "evaluation").mkdir(parents=True)
+        sys.path.insert(0, str(SKILL / "scripts"))
+        import run_owned
+        self.run_owned = run_owned
+        self.sdir = self.ws / "work" / "pids"
+
+    def start(self, name: str) -> None:
+        proc = self.run_owned.start(self.sdir, name, [sys.executable, "-c", "import time; time.sleep(300)"], cwd=self.ws)
+        self.procs = {**getattr(self, "procs", {}), name: proc}
+        self.addCleanup(self.stop, name)
+
+    def stop(self, name: str) -> None:
+        if self.run_owned.status(self.sdir, name)["state"] == "running":
+            self.run_owned.stop(self.sdir, name, grace=1, proc=self.procs[name])
+        self.procs[name].wait()
+
+    def monitor(self, **extra: object) -> dict:
+        return {"session_id": "s", "hook_event_name": "PreToolUse", "tool_name": "Monitor", "cwd": str(self.ws),
+                "tool_input": {"command": "tail -f work/pids/gate.log", "description": "watch"}, **extra}
+
+    def test_polls_and_monitor_run_while_no_job_does(self) -> None:
+        for command in self.POLLS:
+            with self.subTest(command=command):
+                self.assertEqual(run_hook(bash(command, self.ws), self.ws).returncode, 0)
+        self.assertEqual(run_hook(self.monitor(), self.ws).returncode, 0)
+
+    def test_while_the_gate_runs_they_are_denied_with_its_wait_command(self) -> None:
+        self.start("gate")
+        for command in self.POLLS:
+            with self.subTest(command=command):
+                out = run_hook(bash(command, self.ws), self.ws)
+                self.assertEqual(out.returncode, 2, out.stderr)
+                self.assertIn("poll guard", out.stderr)
+                self.assertIn(f"gate.py --workspace {self.ws} --wait", out.stderr)
+        out = run_hook(self.monitor(), self.ws)
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("timeout 600000", out.stderr)
+        self.assertEqual(run_hook(bash("git status", self.ws), self.ws).returncode, 0, "only polls are denied")
+        self.stop("gate")
+        self.assertEqual(run_hook(bash("sleep 30", self.ws), self.ws).returncode, 0, "allowed once the job ends")
+
+    def test_each_job_gets_its_own_re_attach_command(self) -> None:
+        self.start("rescore")
+        self.assertIn(f"rescore.py --workspace {self.ws}", run_hook(bash("sleep 9", self.ws), self.ws).stderr)
+        self.stop("rescore")
+        self.start("eval-1")
+        self.assertIn(f"run_owned.py --workspace {self.ws} wait eval-1",
+                      run_hook(bash("sleep 9", self.ws), self.ws).stderr)
+
+    def test_subagents_executors_and_other_places_may_poll(self) -> None:
+        self.start("gate")
+        self.assertEqual(run_hook(self.monitor(agent_id="a1"), self.ws).returncode, 0)
+        self.assertEqual(run_hook(bash("sleep 30", self.ws), self.ws, CSA_EXECUTOR="1").returncode, 0)
+        self.assertEqual(run_hook(bash("sleep 30", OUTSIDE), OUTSIDE).returncode, 0)
+
+
 def cursor(command: str, cwd: Path = BUILD) -> dict:
     return {"conversation_id": "c", "generation_id": "g", "hook_event_name": "beforeShellExecution",
             "cursor_version": "2026.10.16", "workspace_roots": [str(cwd)], "command": command,

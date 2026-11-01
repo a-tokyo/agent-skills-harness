@@ -12,6 +12,7 @@ marks what the factory's own tests or benchmark ran.
 - Headless runs, judges and executors
 - Subagents
 - Gate wait
+- Poll guard
 - Kill guard (and the loop guard)
 - Read guard
 - Subagent guard
@@ -81,6 +82,21 @@ shrank `--wait-timeout` to fit it, and polled (26 exit-124 calls over 30 builds)
 `work/evaluation/*.sh` `timeout` 600000 and `run_in_background` false itself, through `updatedInput` (verified
 against the 2.1.x source: the hook's object replaces the tool input, so it echoes the other fields); a host that
 ignores `updatedInput` keeps the call's own timeout, and the scripts' exit 124 line says to issue the command again.
+
+## Poll guard
+
+While a job the build owns runs (`gate`, `rescore`, a `run_owned.py start <name> --wait` run: a running record in
+`work/pids/`), the kill guard denies the build's main session a Bash sleep or poll loop (`sleep N`, `until ...; do`,
+`while ...; do ... sleep`, `while kill -0`) and, on Claude Code, the Monitor tool (its own `PreToolUse` matcher in
+`hooks/hooks.json`). The message names the command that blocks on that job (`gate.py --wait`, `rescore.py`,
+`run_owned.py wait <name>`). r19 Haiku builders polled a running gate with Monitor or sleep loops dozens of times a
+build, each poll re-reading the whole context. Subagents (`agent_id`) and executor sessions (`CSA_EXECUTOR`) may poll.
+
+| Host | Hook | Status |
+|---|---|---|
+| Claude Code | the kill guard on `Bash` and `Monitor` | tested offline |
+| Cursor | the kill guard's `beforeShellExecution` (shell polls only) | contract tested offline |
+| Codex | the kill guard's `PreToolUse` (shell polls only) | contract tested offline; untested in Codex |
 
 ## Kill guard
 
