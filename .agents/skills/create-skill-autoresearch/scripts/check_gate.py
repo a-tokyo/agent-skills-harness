@@ -805,6 +805,10 @@ def next_action(workspace: Path, skill: str | None = None) -> Next:
     if live:
         return Next("gate_running", "5.0: the gate is running; wait on it (never restart it):",
                     [f"python3 {_q(SCRIPTS / 'gate.py')} --workspace {_q(workspace)} --wait"], note=SHELL_NOTE)
+    if last := panel.exhausted(workspace):
+        return _verdict(workspace, "UNSHIPPED", [line for line in [last.get("line")] if line],
+                        f"the panel ran its {panel.max_rounds(workspace)} round(s) and the skill changed since; no "
+                        "gate re-run changes that", unfinished, False)
     if not (workspace / "work" / "evaluation" / "evaluate.sh").is_file():
         return Next("evaluate", "Phase 3.4: record the split and write work/evaluation/evaluate.sh (phase-3.md)")
     try:
@@ -815,10 +819,6 @@ def next_action(workspace: Path, skill: str | None = None) -> Next:
     if not any(e.get("experiment") == 0 and is_number(e.get("metric")) for e in experiments):
         return Next("baseline", "Phase 3.5: score the baseline, commit it and log experiment 0 with held_out and "
                                 "the noise estimate (phase-3.md 3.5)", [_self(workspace, "--next")])
-    if last := panel.exhausted(workspace):
-        return _verdict(workspace, "UNSHIPPED", [last.get("line") or ""],
-                        f"the panel ran its {panel.max_rounds(workspace)} round(s) and the skill changed since; no "
-                        "gate re-run changes that", unfinished, False)
     loop, why = loop_done(workspace, name)
     reopened = why.startswith("the panel's latest consensus")
     if not loop and reopened and _spent(workspace):
@@ -933,6 +933,13 @@ def main(argv: list[str] | None = None) -> int:
               (f"BUILD FINISHED: verdict {label}" if done else f"BUILD UNFINISHED: {reason}"))
         return 0 if done else 1
     verdict = validate(workspace, args.skill)
+    if (args.panel or args.panel_receipt or args.consensus) and not verdict.valid and panel.checkable(workspace) \
+            and panel.exhausted(workspace) is not None:  # metric-first: no re-gate after the panel's round (gate.py)
+        try:
+            panel.check_round(workspace, skill_sha256(workspace, resolve_skill(workspace, args.skill)))
+        except (panel.RoundsExhausted, GateError) as exc:
+            print(f"PANEL ROUNDS EXHAUSTED: {exc}")
+            return 1
     if not (args.panel_receipt or args.consensus) or not verdict.valid:
         print(json.dumps(asdict(verdict)) if args.json else verdict.line())
     if not verdict.valid:

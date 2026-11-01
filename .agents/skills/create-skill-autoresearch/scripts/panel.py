@@ -21,7 +21,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path, PurePosixPath
 
 from gate_common import EVAL_DIR, GateError, _strip_comment, _unquote, check_skill_name, \
-    file_sha256, is_number, now, read_json, skill_sha256, write_json
+    file_sha256, is_number, log_attempt, now, read_attempts, read_json, skill_sha256, write_json
 
 RUBRIC = EVAL_DIR / "rubric.yaml"
 PANEL_DIR = PurePosixPath("work") / "experiments" / "panel"
@@ -30,6 +30,7 @@ ROUNDS_DIR = PANEL_DIR / "rounds"
 RULES_PATH = Path(__file__).resolve().parent.parent / "references" / "verdict-rules.json"
 DA = "devils-advocate"
 ROLES = ("verifier-a", "verifier-b", DA)
+ALL_ROLES = ROLES
 RANK = {"UNSHIPPED": 0, "SHIP WITH CAVEATS": 1, "SHIP": 2}
 METRICS = {"answer-key": True, "llm-judge": False}  # rubric.yaml `metric:` -> checkable outputs (metric-first)
 QUOTED = re.compile(r'"([^"]+)"|\u201c([^\u201d]+)\u201d')  # "…" or “…”
@@ -283,6 +284,8 @@ def write_receipt(workspace: Path, role: str, source: Path, skill: str, skill_sh
     if not synthesis:
         _receipt_path(workspace, role, True).unlink(missing_ok=True)
     write_json(path, receipt)
+    if not synthesis:
+        log_attempt(workspace, "panel", role=role, skill=skill, skill_sha256=skill_sha)
     return path
 
 
@@ -300,28 +303,48 @@ def rounds(workspace: Path) -> list[dict]:
     return found
 
 
+def started(workspace: Path) -> list[tuple[str, str]]:
+    """(skill sha, skill) of every panel round started, oldest first, once per skill hash: a round starts with its
+    first receipt (gate-attempts.jsonl `panel` lines, which survive a receipt being overwritten), archived rounds
+    and the receipt files on disk."""
+    found: dict[str, str] = {}
+    entries = [e for e in read_attempts(workspace) if e.get("step") == "panel"] + rounds(workspace) + [
+        r for r in (read_json(workspace / PANEL_DIR / f"{role}.json") for role in ALL_ROLES) if r]
+    for entry in entries:
+        sha, skill = entry.get("skill_sha256"), entry.get("skill")
+        if isinstance(sha, str) and sha and isinstance(skill, str):
+            found.setdefault(sha, skill)
+    return list(found.items())
+
+
 def check_round(workspace: Path, skill_sha: str) -> int:
     """The round a consensus on this skill belongs to (the last when the skill is unchanged since, else the
-    next), or RoundsExhausted when that would pass `max_panel_rounds`."""
+    next), or RoundsExhausted when the panel already started `max_panel_rounds` rounds on other versions of the
+    skill (exhausted)."""
     archive = rounds(workspace)
     n = len(archive) if archive and archive[-1].get("skill_sha256") == skill_sha else len(archive) + 1
-    if n > (cap := max_rounds(workspace)):
-        raise RoundsExhausted(f"the panel ran its {cap} rounds (max_panel_rounds) and the skill changed since round "
-                              f"{n - 1}; no round {n} starts. End the build UNSHIPPED: write `Verdict: UNSHIPPED` "
-                              f"in BENCHMARK.md beside the last round's line: {archive[-1].get('line')}")
+    last = exhausted(workspace)
+    if n > (cap := max_rounds(workspace)) or last is not None:
+        line = (last or archive[-1]).get("line")
+        raise RoundsExhausted(f"the panel ran its {cap} rounds (max_panel_rounds) and the skill changed since; no "
+                              "new round starts. End the build UNSHIPPED: write `Verdict: UNSHIPPED` in BENCHMARK.md"
+                              + (f" beside the last round's line: {line}" if line else ""))
     return n
 
 
 def exhausted(workspace: Path) -> dict | None:
-    """The last round when the panel ran all `max_panel_rounds` and the skill changed since, else None."""
-    archive = rounds(workspace)
-    if len(archive) < max_rounds(workspace):
+    """The last round when the panel started all `max_panel_rounds` rounds (started) and the skill as it is now
+    is none of the versions they reviewed, else None. A round with receipts but no consensus counts: on the
+    metric-first path (one round) any change after the first receipt ends the build."""
+    begun, archive = started(workspace), rounds(workspace)
+    if len(begun) < max_rounds(workspace):
         return None
+    last = archive[-1] if archive else {"line": "", "skill": begun[-1][1], "skill_sha256": begun[-1][0]}
     try:
-        current = skill_sha256(workspace, check_skill_name(archive[-1].get("skill")))
+        current = skill_sha256(workspace, check_skill_name(begun[-1][1]))
     except GateError:
-        return archive[-1]
-    return None if current == archive[-1].get("skill_sha256") else archive[-1]
+        return last
+    return None if current in dict(begun) else last
 
 
 def _overall(scores: dict[str, float], rubric: Rubric) -> float:

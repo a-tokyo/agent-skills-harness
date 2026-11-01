@@ -512,6 +512,18 @@ def _settled(ws: Path, args: argparse.Namespace) -> bool:
     return check_gate.validate(ws, args.skill).code not in RERUN_CODES
 
 
+def panel_spent(ws: Path) -> bool:
+    """Metric-first: the panel's one round started (its first receipt) and the skill changed since, so no gate
+    can change the verdict and none starts. Prints the UNSHIPPED instruction check_gate.py --next gives."""
+    if not check_gate.panel.checkable(ws) or check_gate.panel.exhausted(ws) is None:
+        return False  # the panel-verdict path keeps its ITERATE re-gates up to max_panel_rounds
+    print(f"gate: not started: the panel already ran its {check_gate.panel.max_rounds(ws)} round(s) and output/ "
+          "changed since, so no gate run changes the verdict (5.4: edit nothing after the panel). The build ends "
+          "UNSHIPPED:", file=sys.stderr)
+    print(check_gate.next_action(ws).render())
+    return True
+
+
 def supervise(ws: Path, args: argparse.Namespace) -> int:
     """Start the gate as the owned job `gate` (stopping a live one first with --restart), then wait for it
     unless --detach or --restart is given without --wait. `--detach --wait` never starts a second gate: it waits
@@ -532,6 +544,8 @@ def supervise(ws: Path, args: argparse.Namespace) -> int:
                 print(verdict.line())
                 return 0 if verdict.valid else EXIT_INVALID
             return wait_gate(ws, args.wait_timeout, verbose=args.verbose)
+    if not live and panel_spent(ws):
+        return EXIT_PRECONDITION
     if live and not args.restart:
         print(f"gate: a `{JOB}` job is already running (pgid {live['pgid']}, log {live['log']}).\n"
               f"  wait:      {WAIT_HINT.format(ws=ws)}\n"

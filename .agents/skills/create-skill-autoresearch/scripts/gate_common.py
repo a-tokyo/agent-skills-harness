@@ -417,13 +417,14 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def log_attempt(workspace: Path, step: str, error: str | None = None) -> None:
-    """Append `record` or `gate`, and the GateError that stopped it, to gate-attempts.jsonl: check_gate.py
-    --finish requires an UNSHIPPED build to have tried the gate."""
+def log_attempt(workspace: Path, step: str, error: str | None = None, **extra: object) -> None:
+    """Append `record`, `gate`, `rescore` or `panel`, and the GateError that stopped it, to gate-attempts.jsonl:
+    check_gate.py --finish requires an UNSHIPPED build to have tried the gate, and panel.py counts the skill hashes
+    its rounds started on there (a receipt file is overwritten; this log is only appended to)."""
     path = workspace / GATE_ATTEMPTS
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps({"at": now(), "step": step, "error": error}) + "\n")
+        fh.write(json.dumps({"at": now(), "step": step, "error": error, **extra}) + "\n")
 
 
 def read_attempts(workspace: Path) -> list[dict]:
