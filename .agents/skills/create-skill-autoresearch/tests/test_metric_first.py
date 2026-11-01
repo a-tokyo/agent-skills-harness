@@ -19,7 +19,9 @@ REVIEW_LOW = {"verifier-a": (5, 5), "verifier-b": (5, 6), "devils-advocate": (5,
 CITED = {"evidence": '"name: demo"', "repro": "run the skill on input/gold-01.md: it writes outside the workspace"}
 
 
-class MetricFirstTest(TempWorkspace):
+class MetricFirstFixture(TempWorkspace):
+    """A metric-first build (`metric: answer-key`) with output/ committed as the baseline; test_rescore.py too."""
+
     def setUp(self) -> None:
         super().setUp()
         self.make_build(["gold-01", "trigger-1"])
@@ -76,6 +78,8 @@ class MetricFirstTest(TempWorkspace):
         (self.ws / "BENCHMARK.md").write_text(f"Verdict: {verdict}\n\n{gate_line}\n" + "".join(f"{x}\n" for x in lines))
         return json.loads(self.run_script("check_gate.py", "--finish", "--json").stdout)
 
+
+class MetricFirstTest(MetricFirstFixture):
     def test_checkable_ship_stands_on_the_gate_and_metric_not_the_panels_scores(self) -> None:
         self.log(0.91)
         self.gate()
