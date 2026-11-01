@@ -488,7 +488,7 @@ def compute(workspace: Path, skill: str, skill_sha: str) -> Consensus:
 
 def _receipts_digest(workspace: Path) -> str:
     digest = hashlib.sha256()
-    for role in ALL_ROLES:
+    for role in roles(workspace):  # the full profile's digest is the one consensus.json files already record
         for synthesis in (False, True):
             digest.update(f"{role}{synthesis}".encode() + (file_sha256(_receipt_path(workspace, role, synthesis))
                                                            or "-").encode())

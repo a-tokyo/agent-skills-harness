@@ -264,6 +264,26 @@ class LiteNextTest(test_metric_first.MetricFirstFixture):
         self.assertNotIn("verifier-a", out)
 
 
+class FullProfileUnchangedTest(TempWorkspace):
+    def test_the_receipts_digest_is_the_one_older_consensus_records_hold(self) -> None:
+        """consensus.json binds the receipts by a digest over the three roles; the lite role must not enter it, or
+        every consensus written before the lite profile reads as stale (agent-skills fidelity fixtures)."""
+        import hashlib
+        import panel
+        self.make_build(["gold-01"])
+        folder = self.ws / "work" / "experiments" / "panel"
+        folder.mkdir(parents=True)
+        for role in (*panel.ROLES, panel.REVIEWER):
+            (folder / f"{role}.json").write_text(f'{{"role": "{role}"}}')
+        old = hashlib.sha256()
+        for role in ("verifier-a", "verifier-b", "devils-advocate"):
+            for synthesis in (False, True):
+                path = folder / f"{role}{'.synthesis' if synthesis else ''}.json"
+                old.update(f"{role}{synthesis}".encode() + (gate_common.file_sha256(path) or "-").encode())
+        with mock.patch.dict(os.environ, {"CSA_PROFILE": ""}):
+            self.assertEqual(panel._receipts_digest(self.ws), old.hexdigest())
+
+
 class LiteRulesTest(unittest.TestCase):
     def test_the_numbers_live_in_verdict_rules(self) -> None:
         lite = json.loads((SKILL / "references" / "verdict-rules.json").read_text())["lite"]
