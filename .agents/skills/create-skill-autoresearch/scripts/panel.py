@@ -9,6 +9,8 @@ references/rubric-templates.md.
 Under the lite profile (gate_common.profile) the panel is one `reviewer` (references/panel/reviewer.md) holding
 the Devil's Advocate's escalation, with no synthesis round; its receipt alone is the consensus. The full profile
 accepts only the three roles, the lite one only the reviewer.
+A receipt keeps the member's cited failure scenarios (`evidence` and `repro`) as `findings`, which a fix cycle may fix
+(scripts/fix_cycle.py); once one opened, no panel receipt is accepted.
 With `metric: answer-key` the panel is a review: its consensus allows UNSHIPPED only on a veto (a hard defect a
 receipt cites), and check_gate.py decides the rest from the gate and the Phase 4 metric (verdict-rules.json
 metric_first).

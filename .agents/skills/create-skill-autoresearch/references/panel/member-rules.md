@@ -22,6 +22,9 @@ the receipt can check.
 the Devil's Advocate's ESCALATE (beside its `escalation`), with a reproducible failure. Each needs `evidence` (a
 verbatim quote from the skill or `input/`) and `repro` (the input or command that shows the failure).
 
+**Failure scenarios.** One you can reproduce carries `evidence` (a verbatim quote, checked like a score's) and
+`repro`: a cited finding the builder may fix in a fix cycle, which you then re-check. Leave both out of the rest.
+
 **Role receipt** (your last step). Write your JSON to the path your role file names, then run the `check_gate.py
 --panel-receipt` command it gives, with `<workspace>` and `<skill-dir>` filled in. A non-zero exit names what to fix
 in your JSON; fix it and re-run. If you cannot run commands, return your JSON and the orchestrator runs that

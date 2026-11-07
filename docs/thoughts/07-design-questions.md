@@ -130,3 +130,27 @@ standards, and with 3-9 gold standards there was no validation split for "the lo
 - Known weakness: under leave-one-out the held-out case was seen in the Phase 3 draft and in earlier experiments, and
   one case against an N-1 mean carries case-difficulty spread, which the noise threshold (measured on training
   re-runs) does not cover; if leave-one-out builds run to the budget and cost regresses, that threshold is the lever.
+
+### D21 -- Verified fix cycles after the panel (2026-11-07, user decision)
+Evidence (r20-* benchmark, harness 53dd1b5): 26 of 60 builds ended UNSHIPPED, many with hidden answer-key scores of
+0.985-1.0. The dominant shape: the panel (or the lite reviewer) found a real, reproducible defect (a request line
+pasted into a double-quoted shell command, a Decimal crash for low-income applicants, a parser misreading money lines),
+the builder fixed it, and the one-round rule (metric-first, lite) or a spent Phase 4 budget (r20-t1 Haiku ITERATEs)
+ended the build UNSHIPPED with the better skill as a draft.
+- A consensus that ends the build UNSHIPPED on **cited** findings may run up to `max_fix_cycles` (2, every profile)
+  fix cycles (`scripts/fix_cycle.py`, `references/fix-cycle.md`). A finding is a receipt's `veto` or, on the
+  panel-verdict path, a failure scenario the member cites with a verbatim `evidence` quote and a `repro`; nothing
+  else opens a cycle, and none opens when the gate or the metric already allows only UNSHIPPED.
+- The fix is one commit on top of the reviewed version whose every hunk lies in a range the notes declare for a
+  finding, with the gate inputs unchanged; only then does the gate re-run. The roles that raised the findings re-check
+  only those findings and the touched lines, in receipts bound to the fixed hash; a regression counts as unresolved.
+  The panel never re-runs and no dimension is added. Outside a cycle, A3 stands: a post-panel edit cannot re-gate.
+- The original panel scores stand; resolved findings leave the veto. Metric-first: the gate and metric decide.
+  Panel-verdict path: ITERATE and BLOCK come from scores, which a cycle does not change, so clearing findings alone
+  could not move the label; an ITERATE, BLOCK or ESCALATE label instead caps the verdict at SHIP WITH CAVEATS once
+  every cited finding resolves (the below-target scores are the caveats), the gate and metric below that. This is the
+  one reading of "the verdict can only improve to what the gate, metric and remaining findings allow" that lets the
+  r20-t1 ITERATEs reach a verdict without re-scoring.
+- Known limit: the declared-lines rule is mechanical; the builder declares the ranges, and only the re-check judges
+  whether a declared change is part of the fix. A post-panel edit with no cited finding (r20-t2-haiku-2's hardening)
+  still ends UNSHIPPED.

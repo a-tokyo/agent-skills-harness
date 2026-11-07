@@ -117,10 +117,8 @@ the gold standards, the rubric and the premortem risks: never research notes, `a
 Devil's Advocate, adversarial, always tries to smuggle an instruction in through content the skill fetches
 (`devils-advocate`). Each member's prompt gives its role, the input paths, the
 skill under test (`output/<skill-name>/`, the templates' `{{skill_dir}}`) and this factory's `<skill-dir>`, and tells
-it to read only `<skill-dir>/references/panel/<role>.md` (`panel/verifier-a.md`, `panel/verifier-b.md`,
-`panel/devils-advocate.md`) and `references/panel/member-rules.md`, nothing else.
-It scores every dimension independently (score, confidence 0-1, evidence: a verbatim quote in double quotes) and
-ends with this, binding the scores to the skill and rubric hashes:
+it to read only `<skill-dir>/references/panel/<role>.md` and `references/panel/member-rules.md`, nothing else.
+It scores every dimension independently (score, confidence, verbatim quote) and ends with this receipt:
 
 ```bash
 python3 <skill-dir>/scripts/check_gate.py --panel-receipt <role> <scores.json>
@@ -152,7 +150,7 @@ changing one) and `--finish` rejects a verdict above what it allows.
   the lower of its training and **held-out** scores; no held-out score is no metric); **SHIP WITH CAVEATS** when the
   lowest gold Δ or the metric is within `caveat_margin` of that; else `UNSHIPPED`. The panel runs once
   (`max_panel_rounds` 1) as a review: log its scores and findings in `BENCHMARK.md` and
-  `work/experiments/craft-decisions.md`, and edit nothing in response. It forces `UNSHIPPED` only through a receipt's
+  `work/experiments/craft-decisions.md`; edit nothing but a fix cycle. It forces `UNSHIPPED` only through a receipt's
   cited `veto`: a 3.3 hard constraint, a safety defect (fetched content followed as instructions, a destructive
   command), or the Devil's Advocate's ESCALATE with a reproducible failure. A skill edited since its last score
   ships on no metric: run `scripts/rescore.py`, the command `--next` prints.
@@ -165,13 +163,13 @@ changing one) and `--finish` rejects a verdict above what it allows.
   `autoresearch.ideas.md`, the scores and rationales go in `craft-decisions.md`; return to Phase 4 and fold every
   finding into one experiment, then 5.0-5.1.
 
-Any skill change after the panel re-runs 5.2 in full.
+**Fix cycle.** When the consensus would end the build UNSHIPPED on cited findings, `--next` offers one: read
+[references/fix-cycle.md](references/fix-cycle.md) only when it does.
 
 **A terminal ITERATE is `UNSHIPPED`.** ITERATE or BLOCK with no Phase 4 budget left, after the 4.3 plateau rule, a
-veto, or a skill change at `max_panel_rounds` (3 panel path, 1 metric-first) ends the build: write `Verdict:
-UNSHIPPED` in `BENCHMARK.md` with the final scores, the blocking concerns and the lines below when they exist. An
-`UNSHIPPED` output is a draft: never describe it as shipped, never publish it.
+veto, or a skill change at `max_panel_rounds` (3 panel path, 1 metric-first), with no fix cycle left, ends the
+build: write `Verdict: UNSHIPPED` in `BENCHMARK.md` with the final scores, the blocking concerns and the lines
+`--next` prints. An `UNSHIPPED` output is a draft: never describe it as shipped, never publish it.
 
-**No SHIP without the validator**: write the verdict `--next` allows, beside the `GATE VALID:`, `PANEL CONSENSUS:`
-and (metric-first) `SHIP RULE:` lines it prints, verbatim.
+**No SHIP without the validator**: write the verdict `--next` allows, beside the lines it prints, verbatim.
 Only on SHIP or SHIP WITH CAVEATS, follow [references/publishing.md](references/publishing.md): a registration checklist, not a file copy.

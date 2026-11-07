@@ -815,10 +815,11 @@ def _spent(workspace: Path) -> bool:
 
 
 def _verdict(workspace: Path, allowed: str, lines: list[str], why: str, unfinished: str | None,
-             checkable: bool) -> Next:
+             checkable: bool, cycle: bool = False) -> Next:
+    what = "After the fix cycle" if cycle else "On this metric-first path the panel is a review"
     note = (f"Then: {_self(workspace, '--next')}" + (
-        "\nOn this metric-first path the panel is a review: edit nothing in output/ now; a skill change ends the "
-        "build UNSHIPPED." if checkable and allowed != "UNSHIPPED" else ""))
+        f"\n{what}: edit nothing in output/ now; a skill change ends the build UNSHIPPED."
+        if (checkable or cycle) and allowed != "UNSHIPPED" else ""))
     text = (f"5.4: write BENCHMARK.md at the build root with `Verdict: {allowed}` ({why}), the scores and concerns, "
             "and these lines verbatim:")
     return Next("verdict", text, lines=lines, note=note, before=[unfinished] if unfinished else [])
@@ -857,7 +858,7 @@ def _fix_next(workspace: Path, name: str, unfinished: str | None) -> Next | None
         return Next("rescore", f"score output/{name}/ as fixed (the ship rule reads it); then --next:",
                     [rescore_command(workspace), _self(workspace, "--next")])
     return _verdict(workspace, rule.allowed, [gate.line(), rule.consensus_line, rule.cycle_line(), rule.line()],
-                    f"fix cycle {rule.n}", unfinished, True)
+                    f"fix cycle {rule.n}", unfinished, False, cycle=True)
 
 
 def _fix_open(workspace: Path, name: str, cycle: dict, current: str) -> Next:
