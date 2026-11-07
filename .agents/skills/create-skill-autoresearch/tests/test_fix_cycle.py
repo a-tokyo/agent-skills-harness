@@ -264,6 +264,16 @@ class PanelPathFixCycleTest(FixCycleFixture):
                                              "CAVEATS)"), lines[-1])
         self.assertIn("allows at most SHIP WITH CAVEATS", self.finish("SHIP", *lines[1:])["reason"])
         self.assertTrue(self.finish("SHIP WITH CAVEATS", *lines[1:])["finished"])
+        self.assert_edit_ends_unshipped()
+
+    def assert_edit_ends_unshipped(self) -> None:
+        """A3 after a closed cycle, on any path: an edit can't re-gate or start a panel round; UNSHIPPED."""
+        (self.ws / "BENCHMARK.md").unlink()
+        skill = self.ws / "output" / "demo" / "SKILL.md"
+        skill.write_text(skill.read_text() + "More.\n")
+        out = self.run_script("gate.py", "--model", "m")
+        self.assertEqual(out.returncode, 3, out.stdout + out.stderr)
+        self.assertIn("`Verdict: UNSHIPPED`", self.next())
 
     def test_an_iterate_with_phase_4_left_returns_to_phase_4_not_a_cycle(self) -> None:
         self.log(0.95)
@@ -305,6 +315,7 @@ class LiteFixCycleTest(FixCycleFixture):
         head, lines = self.verdict_lines()
         self.assertIn("`Verdict: SHIP WITH CAVEATS`", head)
         self.assertTrue(self.finish("SHIP WITH CAVEATS", *lines[1:])["finished"])
+        PanelPathFixCycleTest.assert_edit_ends_unshipped(self)
 
     def test_lite_metric_first_veto_unresolved_ends_unshipped_at_the_cap(self) -> None:
         self.log(0.95)

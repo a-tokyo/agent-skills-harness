@@ -375,20 +375,20 @@ def check_round(workspace: Path, skill_sha: str) -> int:
 def exhausted(workspace: Path) -> dict | None:
     """The last round when the panel started all `max_panel_rounds` rounds (started) and the skill as it is now
     is none of the versions they reviewed, else None. A round with receipts but no consensus counts: on the
-    metric-first path (one round) any change after the first receipt ends the build. A fix cycle that is open, or
-    closed on the skill as it is now, governs instead (fix_cycle.governs)."""
-    begun, archive = started(workspace), rounds(workspace)
-    if len(begun) < max_rounds(workspace):
-        return None
+    metric-first path (one round) any change after the first receipt ends the build. Once a fix cycle opened, on
+    either path: None only while the cycle is open or closed on the skill as it is now (fix_cycle.governs)."""
+    import fix_cycle  # noqa: PLC0415  (fix_cycle imports this module)
+    begun, archive, cycled = started(workspace), rounds(workspace), bool(fix_cycle.cycles(workspace))
+    if len(begun) < max_rounds(workspace) and not cycled or not begun:
+        return None  # after a fix cycle no new round starts on either path, whatever rounds are left
     last = archive[-1] if archive else {"line": "", "skill": begun[-1][1], "skill_sha256": begun[-1][0]}
     try:
         current = skill_sha256(workspace, check_skill_name(begun[-1][1]))
     except GateError:
         return last
-    if current in dict(begun):
-        return None
-    import fix_cycle  # noqa: PLC0415
-    return None if fix_cycle.governs(workspace, current) else last
+    if cycled:
+        return None if fix_cycle.governs(workspace, current) else last
+    return None if current in dict(begun) else last
 
 
 def _overall(scores: dict[str, float], rubric: Rubric) -> float:

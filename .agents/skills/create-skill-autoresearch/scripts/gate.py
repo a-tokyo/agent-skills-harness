@@ -521,8 +521,8 @@ def panel_spent(ws: Path) -> bool:
         print(f"gate: not started: {refusal}. Next:", file=sys.stderr)
         print(check_gate.next_action(ws).render())
         return True
-    if not check_gate.panel.checkable(ws) or check_gate.panel.exhausted(ws) is None:
-        return False  # the panel-verdict path keeps its ITERATE re-gates up to max_panel_rounds
+    if not (check_gate.panel.checkable(ws) or check_gate.fix_cycle.cycles(ws)) or check_gate.panel.exhausted(ws) is None:
+        return False  # the panel-verdict path keeps its ITERATE re-gates up to max_panel_rounds, until a fix cycle
     print(f"gate: not started: the panel already ran its {check_gate.panel.max_rounds(ws)} round(s) and output/ "
           "changed since, so no gate run changes the verdict (5.4: edit nothing after the panel). The build ends "
           "UNSHIPPED:", file=sys.stderr)
