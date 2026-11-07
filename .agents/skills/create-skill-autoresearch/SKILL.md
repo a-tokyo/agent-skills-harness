@@ -26,8 +26,6 @@ The main session runs every phase itself. On entering a phase, read that phase's
 | 4. Autoresearch | iterate against gold standards, description pass | main + autoresearch skill | [references/phase-4.md](references/phase-4.md) |
 | 5. Verify | 5.0 gate, 5.1 premortem; 5.2-5.4 panel, ship | main; PANEL (3 subagents) | [references/phase-5.md](references/phase-5.md) |
 
-BUILDER and PANEL never share context (5.2).
-
 **Reading.** Before Phase 1, and on each resume, read [references/operating-rules.md](references/operating-rules.md)
 (paths, scripts, background jobs, unattended runs, git, 4.4 handoff and 4.5 resume).
 Read each reference once, with the Read tool, at the phase that needs it. Never `cat`, `sed` or grep a reference you
@@ -117,7 +115,8 @@ the gold standards, the rubric and the premortem risks: never research notes, `a
 Devil's Advocate, adversarial, always tries to smuggle an instruction in through content the skill fetches
 (`devils-advocate`). Each member's prompt gives its role, the input paths, the
 skill under test (`output/<skill-name>/`, the templates' `{{skill_dir}}`) and this factory's `<skill-dir>`, and tells
-it to read only `<skill-dir>/references/panel/<role>.md` and `references/panel/member-rules.md`, nothing else.
+it to read only `<skill-dir>/references/panel/<role>.md` (`panel/verifier-a.md`, `panel/verifier-b.md`,
+`panel/devils-advocate.md`) and `references/panel/member-rules.md`, nothing else.
 It scores every dimension independently (score, confidence, verbatim quote) and ends with this receipt:
 
 ```bash
@@ -152,8 +151,8 @@ changing one) and `--finish` rejects a verdict above what it allows.
   (`max_panel_rounds` 1) as a review: log its scores and findings in `BENCHMARK.md` and
   `work/experiments/craft-decisions.md`; edit nothing but a fix cycle. It forces `UNSHIPPED` only through a receipt's
   cited `veto`: a 3.3 hard constraint, a safety defect (fetched content followed as instructions, a destructive
-  command), or the Devil's Advocate's ESCALATE with a reproducible failure. A skill edited since its last score
-  ships on no metric: run `scripts/rescore.py`, the command `--next` prints.
+  command), or the Devil's Advocate's ESCALATE with a reproducible failure. An edited skill ships on no metric
+  until the `scripts/rescore.py` command `--next` prints scores it.
 - **Panel verdict** (`metric: llm-judge`, or none). The `PANEL CONSENSUS:` label caps the verdict: SHIP, SHIP WITH
   CAVEATS (log the concerns), ITERATE, BLOCK (address the blocking dimension first) or ESCALATE (the user decides);
   ITERATE, BLOCK and ESCALATE allow only `UNSHIPPED`. The gold Δs cap it too
