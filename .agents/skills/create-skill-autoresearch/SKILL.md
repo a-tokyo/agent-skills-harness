@@ -48,7 +48,7 @@ Read [references/standalone-fallback.md](references/standalone-fallback.md) only
 Install skills with `npx skills add <source> --skill <name> -a <claude-code|cursor|codex|opencode>` (Windows: inside WSL).
 Read [references/hosts.md](references/hosts.md) only when the host is not Claude Code, its hooks need installing, or a panel role runs on another host's CLI.
 
-Hooks (`hooks/`) back these rules in a build (kill, loop, poll, subagent and finish guards); a denial names what to
+Hooks (`hooks/`) back these rules in a build (kill, loop, poll, freeze, subagent and finish guards); a denial names what to
 run instead.
 
 ## Subagents

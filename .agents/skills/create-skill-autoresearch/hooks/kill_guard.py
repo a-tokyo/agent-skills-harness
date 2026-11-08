@@ -21,6 +21,10 @@ executor session (CSA_EXECUTOR set) or one whose evaluate.sh path it cannot reso
 The read guard's shell half rides on it too (hooks/read_guard.py): a `cat`, `sed`, `head`, ... of this skill's
 script or hook source, or a second whole read of a factory reference in one context, is denied.
 
+The freeze guard's shell half rides on it too (hooks/freeze_guard.py): once a panel round has its first receipt,
+a redirect, `tee`, `cp`, `mv`, `rm`, `touch`, `sed -i`, ... writing a build's output/<skill>/ is denied unless a fix
+cycle is open, with the command that opens one.
+
 The poll guard rides on it too: while a job the build owns runs (a run_owned.py record in work/pids/: `gate`,
 `rescore`, an evaluate run), a Bash sleep or poll loop (`sleep N`, `until ...; do`, `while ...; do ... sleep`,
 `while kill -0`) and Claude Code's Monitor tool are denied in the build's main session, with the exact command
@@ -261,13 +265,30 @@ def read_block(command: str, cwd: str | None, event: dict | None) -> str | None:
         return None
 
 
+def freeze_block(command: str, cwd: str | None) -> str | None:
+    """hooks/freeze_guard.py's deny message for a shell write to a frozen output/<skill>/, or None. Any error of its
+    own allows the call."""
+    if "output" not in command:
+        return None
+    try:
+        sys.dont_write_bytecode = True
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import freeze_guard  # noqa: E402  (beside this hook)
+
+        return freeze_guard.shell_block(command, cwd)
+    except Exception as exc:  # noqa: BLE001
+        print(f"freeze guard: {type(exc).__name__}: {exc}; command allowed", file=sys.stderr)
+        return None
+
+
 def check(command: object, cwd: str | None, event: dict | None = None) -> str | None:
     """The deny reason for this call, or None: no guard acts outside a factory build."""
     if not isinstance(command, str) or not guarded(cwd):
         return None
     if is_pattern_kill(command):
         return MESSAGE
-    return loop_block(command, cwd) or poll_block(command, cwd, event) or read_block(command, cwd, event)
+    return (loop_block(command, cwd) or poll_block(command, cwd, event) or read_block(command, cwd, event)
+            or freeze_block(command, cwd))
 
 
 def blocking_input(tool_input: dict, command: str, cwd: str | None) -> dict | None:

@@ -15,6 +15,7 @@ marks what the factory's own tests or benchmark ran.
 - Poll guard
 - Kill guard (and the loop guard)
 - Read guard
+- Freeze guard
 - Subagent guard
 - Finish guard
 - Operating systems
@@ -168,6 +169,26 @@ skill's directory: the skill being built, the task materials and `work/` always 
 | Cursor | `hooks/cursor-hooks.json` `beforeReadFile` (`{"permission": "deny", ...}`); shell reads via `beforeShellExecution` | none: no transcript in the event, so reference reads are allowed | contract from the hooks doc, offline-tested; unverified live |
 | Codex | the kill guard's `PreToolUse` script sees shell reads only | when the event carries `transcript_path` in Claude's format | contract tested offline; untested in Codex |
 | OpenCode | `hooks/opencode-kill-guard.js` on `read` and `bash` | none: no transcript | plugin tested with node; untested in OpenCode |
+
+## Freeze guard
+
+`hooks/freeze_guard.py` (launcher `hooks/freeze-guard`) keeps the skill the panel reviewed: once a panel round has its
+first receipt, a write to a build's `output/<skill>/` is denied unless a fix cycle is open (`check_gate.py
+--fix-cycle`, references/fix-cycle.md). The message names the exact `--fix-cycle --finding <id>` command for the
+findings that cite the file being written (else every open finding), or says no cycle can open and to run `--next`.
+On the panel-verdict path the skill is not frozen while the Phase 4 loop is open (an ITERATE or BLOCK sends the build
+back to it). `work/` and `input/` always write; `CSA_EXECUTOR`, input it cannot read or an error of its own allows
+the write. Shell writes (a redirect, `tee`, `cp`/`mv`/`install`/`ln`/`rsync` destinations, `rm`, `touch`, `sed -i`,
+`perl -i`, `dd of=`) reach it through the kill guard; like the kill guard it is a tripwire, not a sandbox (a heredoc
+fed to an interpreter or `python -c` is not parsed). Why: r21 Haiku builders fixed the panel's findings in ordinary
+commits after the panel, which ended 8 builds UNSHIPPED.
+
+| Host | Ships as | Status |
+|---|---|---|
+| Claude Code | `hooks/hooks.json` `PreToolUse`, matcher `Edit\|Write\|MultiEdit\|NotebookEdit` (`file_path`, `notebook_path`; exit 2, reason on stderr); shell writes via the kill guard | offline-tested; unverified live |
+| Cursor | `hooks/cursor-hooks.json` `preToolUse`, matcher `Write\|Edit\|StrReplace\|MultiEdit\|Delete\|EditNotebook` (`file_path`, `path` or `target_file`; `{"permission": "deny", ...}`); shell writes via `beforeShellExecution` | contract offline-tested; Cursor's edit-tool names and payload are unverified live |
+| Codex | shell writes via the kill guard's `PreToolUse` script | contract tested offline; untested in Codex |
+| OpenCode | `hooks/opencode-kill-guard.js` on `edit`, `write`, `patch` (`filePath`) and `bash` | plugin syntax-checked with node; untested in OpenCode |
 
 ## Subagent guard
 
