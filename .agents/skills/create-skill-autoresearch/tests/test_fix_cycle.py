@@ -363,6 +363,77 @@ class AnyVerdictFixCycleTest(FixCycleFixture):
         self.assertIn("resolved reviewer.F1", out.stdout, out.stdout + out.stderr)
 
 
+class AdoptTest(FixCycleFixture):
+    """r22 item 3: a fix the builder committed after the panel, before any cycle, is adopted by a cycle instead of
+    ending the build with PANEL ROUNDS EXHAUSTED (r21-t3-haiku-5, r21-t2-haiku-3)."""
+
+    env = {"CSA_PROFILE": "lite"}
+
+    def edit_and_commit(self, body: str, message: str) -> str:
+        skill = self.ws / "output" / "demo" / "SKILL.md"
+        skill.write_text(skill.read_text() + body)
+        self.git("add", "-A", "output")
+        self.git("commit", "-q", "-m", message)
+        return self.git("rev-parse", "HEAD")
+
+    def test_receipt_without_consensus_then_a_committed_fix_is_adopted(self) -> None:
+        """r21-t3-haiku-5: the reviewer's receipt was in, the consensus never written, the fix committed."""
+        self.log(0.95)
+        self.gate()
+        self.score("reviewer", (9, 9), [SCENARIO])
+        commit = self.edit_and_commit(FIXED, "fix homelessness date parsing")
+        self.relog(commit, 0.95)
+        nxt = self.next()
+        self.assertIn("5.4 fix cycle 1 of 2", nxt)
+        self.assertIn("adopt that change", nxt)
+        self.assertNotIn("UNSHIPPED`", nxt)
+        out = self.run_script("check_gate.py", "--consensus")
+        self.assertIn("FIX CYCLE AVAILABLE", out.stdout, "not PANEL ROUNDS EXHAUSTED while a cycle can take it")
+        self.open()
+        self.assertTrue((self.ws / "work/experiments/panel/consensus.json").is_file(), "the round's record is written")
+        record = json.loads((self.ws / "work/experiments/panel/fix-cycles/1/cycle.json").read_text())
+        self.assertEqual(record["base_commit"], self.commit)
+        self.assertIn("re-run the gate on the fixed skill", self.next(), "the adopted commit's lines are declared")
+        self.gate()
+        self.recheck("reviewer", {"reviewer.F1": self.resolved()})
+        head, lines = self.verdict_lines()
+        self.assertIn("`Verdict: SHIP`", head)
+        self.assertTrue(lines[1].startswith("PANEL CONSENSUS: SHIP (review; veto: none)"), lines)
+        self.assertTrue(self.finish("SHIP", *lines[1:])["finished"])
+
+    def test_two_post_panel_commits_off_the_log_are_found_and_folded(self) -> None:
+        """r21-t2-haiku-3: a SHIP review, then two fix commits; the reviewed commit is not in the experiment log."""
+        self.edit_and_commit("Reviewed.\n", "record gate cases")
+        reviewed = self.git("rev-parse", "HEAD")
+        self.log(0.95)  # experiment 0 names the baseline commit, not the reviewed one
+        self.gate()
+        self.score("reviewer", (9, 9), [SCENARIO])
+        self.run_script("check_gate.py", "--consensus")
+        self.edit_and_commit(FIXED, "fix override spelling")
+        last = self.edit_and_commit("Guard the empty order.\n", "guard empty orders")
+        self.relog(last, 0.95)
+        self.assertIn("adopt that change", self.next())
+        self.open()
+        record = json.loads((self.ws / "work/experiments/panel/fix-cycles/1/cycle.json").read_text())
+        self.assertEqual(record["base_commit"], reviewed, "found by walking the commits that touched output/")
+        nxt = self.next()
+        self.assertIn("2 commits touch output/demo/ since", nxt)
+        self.assertIn(f"reset -q --soft {reviewed}", nxt)
+        self.git("reset", "-q", "--soft", reviewed)
+        self.git("commit", "-q", "-m", "fix cycle 1")
+        self.relog(self.git("rev-parse", "HEAD"), 0.95)
+        self.assertIn("re-run the gate on the fixed skill", self.next())
+
+    def test_a_post_panel_edit_with_no_finding_still_ends_unshipped_with_the_consensus_line(self) -> None:
+        self.log(0.95)
+        self.gate()
+        self.score("reviewer", (9, 9))
+        self.edit_and_commit("Unreviewed.\n", "tweak")
+        nxt = self.next()
+        self.assertIn("`Verdict: UNSHIPPED`", nxt)
+        self.assertIn("PANEL CONSENSUS: SHIP (review; veto: none)", nxt, "the lines to copy are never empty")
+
+
 class PanelPathFixCycleTest(FixCycleFixture):
     """The panel-verdict path (`metric: llm-judge`): a terminal ITERATE or ESCALATE on cited failure scenarios."""
 
