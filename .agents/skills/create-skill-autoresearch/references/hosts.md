@@ -66,9 +66,10 @@ context walls the panel depends on.
 ## Gate wait
 
 The 5.0 gate is one foreground shell call: `gate.py --detach --wait` starts the owned job `gate` and blocks up to
-570 s (`--wait-timeout`), then exits 124 if it is still running; the job keeps running either way, and re-issuing
-the same command waits on it (never `--restart`, which starts it over). In the 2026-11-01 r18 matrix 59 of 60
-final gates ended inside 570 s, so one call is enough when the shell call may wait that long. What cut it short
+270 s (`--wait-timeout`), then exits 124 if it is still running; the job keeps running either way, and re-issuing
+the same command waits on it (never `--restart`, which starts it over). 270 s stays under the 5-minute prompt
+cache, so the turn after a wait reads the context from cache: r21's 570 s waits rewrote it (9 rewrites after gate
+waits cost the Sonnet task-2 cell 0.87M; a wait turn costs about a tenth of a rewrite). What cut it short
 was the shell tool, not the gate: Haiku builders left Claude Code's Bash timeout at its 120000 ms default, then
 shrank `--wait-timeout` to fit it, and polled (26 exit-124 calls over 30 builds).
 

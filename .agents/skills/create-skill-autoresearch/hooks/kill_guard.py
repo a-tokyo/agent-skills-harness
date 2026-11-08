@@ -33,7 +33,7 @@ subagent, they run.
 
 Long commands block (Claude Code): a call it lets through that runs this factory's scripts (gate.py, rescore.py,
 run_owned.py, check_gate.py) or a build's work/evaluation/*.sh gets `timeout` 600000 and `run_in_background` false
-through `hookSpecificOutput.updatedInput` (exit 0, no permission decision), so the scripts' 570 s waits finish
+through `hookSpecificOutput.updatedInput` (exit 0, no permission decision), so the scripts' 270 s waits finish
 inside one call instead of the call moving to the background after the 120 s default. Claude Code replaces the
 whole tool input with updatedInput (toolExecution.ts `processedInput = result.updatedInput`, checked against the
 2.1.x source and the 2.1.316 build), so the hook echoes every other field unchanged. A host that ignores it keeps
@@ -79,7 +79,7 @@ POLL_MESSAGE = ("Blocked by create-skill-autoresearch's poll guard: the build's 
                 "Polling re-reads your whole context on every call; block on the job instead, in one foreground "
                 "Bash call with timeout 600000:\n  {command}\nOn exit 124 (still running) issue that same command "
                 "again.")
-# This factory's scripts and a build's evaluation scripts: the calls that may wait up to 570 s.
+# This factory's scripts and a build's evaluation scripts: the calls that may wait up to 270 s.
 LONG = re.compile(r"(?:^|[\s/;&|(`=])(?:gate|rescore|run_owned|check_gate)\.py(?![\w.-])"
                   r"|(?:work/evaluation/[\w.-]+|(?:^|[\s/;&|(`=])(?:evaluate|evaluate-checks|run-case))\.sh(?![\w.-])")
 BLOCKING_MS = 600000  # Claude Code's longest Bash timeout (BASH_MAX_TIMEOUT_MS default)
